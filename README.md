@@ -44,19 +44,41 @@ enum Value {
 - ✅ **No unsafe code**: Passes the borrow checker without any unsafe blocks
 - ❌ **Circular references leak**: This is acceptable for a minimal Lisp
 
-## Building and Running
+## Installation
 
-### Build the project
+### Download Pre-built Binaries
+
+Download the latest release for your platform from the [Releases](../../releases) page:
+
+- **Linux x86_64**: `cons-linux-x86_64`
+- **Linux ARM64**: `cons-linux-aarch64`
+- **macOS Intel**: `cons-macos-x86_64`
+- **macOS Apple Silicon**: `cons-macos-aarch64`
+- **Windows**: `cons-windows-x86_64.exe`
+
+Make the binary executable (Linux/macOS):
 ```bash
-cargo build
+chmod +x cons-*
+./cons-*
 ```
 
-### Run the REPL
+### Build from Source
+
+#### Build the project
 ```bash
-cargo run
+cargo build --release
 ```
 
-### Run tests
+The binary will be available at `target/release/cons`.
+
+#### Run the REPL
+```bash
+cargo run --release
+# or
+./target/release/cons
+```
+
+#### Run tests
 ```bash
 cargo test
 ```
@@ -189,17 +211,35 @@ Both results share the same underlying cons cells for `(3 4)`.
 
 ## Architecture
 
-The implementation is organized into modules:
+The implementation is organized into clean, separated modules:
 
-- **lib.rs**: Core interpreter (types, parser, evaluator)
-  - Type system (`Value`, `ConsCell`, `LambdaCell`)
-  - Environment (variable bindings)
-  - Parser (s-expression → AST)
-  - Evaluator (AST → Value)
+```
+src/
+├── lib.rs           # Module exports and public API
+├── language.rs      # Core type system and primitives
+│   ├── Value, AtomType, ConsCell, LambdaCell
+│   ├── Display implementation
+│   └── Primitives: cons, car, cdr, eq, is_atom
+├── parser.rs        # Tokenizer and parser
+│   ├── Token types
+│   ├── tokenize() - string → tokens
+│   └── parse() - tokens → AST
+├── interpreter.rs   # Evaluator and environment
+│   ├── Environment - variable bindings
+│   └── eval() - evaluates expressions
+└── main.rs          # REPL interface
 
-- **main.rs**: REPL interface
+tests/
+└── integration_tests.rs
+```
 
-- **tests/**: Integration tests for all primitives and features
+### Module Responsibilities
+
+- **language.rs**: Defines the core Lisp data types and primitive operations
+- **parser.rs**: Converts s-expressions into the AST representation
+- **interpreter.rs**: Evaluates AST nodes in the context of an environment
+- **lib.rs**: Re-exports public API for external use
+- **main.rs**: Provides an interactive REPL for users
 
 ## Testing
 

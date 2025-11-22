@@ -15,5 +15,5 @@ name = "consair"
 path = "src/lib.rs"
 
 [[bin]]
-name = "consair"
+name = "cons"
 path = "src/main.rs"
