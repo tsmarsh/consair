@@ -1,4 +1,4 @@
-use consair::{eval, parse, Environment};
+use consair::{Environment, eval, parse};
 use std::io::{self, Write};
 
 fn repl() {
@@ -29,10 +29,10 @@ fn repl() {
 
         match parse(input) {
             Ok(expr) => match eval(expr, &mut env) {
-                Ok(result) => println!("{}", result),
-                Err(e) => eprintln!("Error: {}", e),
+                Ok(result) => println!("{result}"),
+                Err(e) => eprintln!("Error: {e}"),
             },
-            Err(e) => eprintln!("Parse error: {}", e),
+            Err(e) => eprintln!("Parse error: {e}"),
         }
     }
 }

@@ -1,13 +1,13 @@
-use consair::{eval, parse, Environment};
+use consair::{Environment, eval, parse};
 
 fn eval_expr(expr: &str) -> String {
     let mut env = Environment::new();
     match parse(expr) {
         Ok(parsed) => match eval(parsed, &mut env) {
             Ok(result) => result.to_string(),
-            Err(e) => format!("Error: {}", e),
+            Err(e) => format!("Error: {e}"),
         },
-        Err(e) => format!("Parse error: {}", e),
+        Err(e) => format!("Parse error: {e}"),
     }
 }
 
@@ -112,10 +112,7 @@ fn test_list_construction() {
     assert_eq!(eval_expr("(cons 'a (cons 'b (cons 'c nil)))"), "(a b c)");
 
     // Test nested lists
-    assert_eq!(
-        eval_expr("(cons (cons 1 2) (cons 3 4))"),
-        "((1 . 2) 3 . 4)"
-    );
+    assert_eq!(eval_expr("(cons (cons 1 2) (cons 3 4))"), "((1 . 2) 3 . 4)");
 }
 
 #[test]
