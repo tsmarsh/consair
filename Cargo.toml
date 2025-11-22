@@ -1,0 +1,19 @@
+[package]
+name = "consair"
+version = "0.1.0"
+edition = "2024"
+authors = ["Claude Code"]
+description = "Minimal Lisp interpreter based on McCarthy's 1960 paper, using Rust's Rc for memory management"
+readme = "README.md"
+keywords = ["lisp", "interpreter", "functional", "mccarthy"]
+categories = ["compilers", "development-tools"]
+
+[dependencies]
+
+[lib]
+name = "consair"
+path = "src/lib.rs"
+
+[[bin]]
+name = "consair"
+path = "src/main.rs"
