@@ -71,8 +71,8 @@ pub fn eval(expr: Value, env: &mut Environment) -> Result<Value, String> {
             .lookup(name)
             .ok_or_else(|| format!("Unbound symbol: {name}")),
 
-        // Lambda is self-evaluating
-        Value::Lambda(_) => Ok(expr),
+        // Lambda and Vector are self-evaluating
+        Value::Lambda(_) | Value::Vector(_) => Ok(expr),
 
         // List evaluation
         Value::Cons(ref cell) => {
@@ -205,6 +205,51 @@ pub fn eval(expr: Value, env: &mut Environment) -> Result<Value, String> {
                     }
                     "=" => {
                         return eval_comparison("=", &cell.cdr, env, |a, b| a == b);
+                    }
+                    // Vector operations
+                    "vector-length" => {
+                        let arg = car(&cell.cdr)?;
+                        let val = eval(arg, env)?;
+                        match val {
+                            Value::Vector(vec) => {
+                                return Ok(Value::Atom(AtomType::Number(NumericType::Int(
+                                    vec.elements.len() as i64,
+                                ))));
+                            }
+                            _ => return Err("vector-length: expected vector".to_string()),
+                        }
+                    }
+                    "vector-ref" => {
+                        let args = cell.cdr.clone();
+                        let vec_expr = car(&args)?;
+                        let rest = cdr(&args)?;
+                        let idx_expr = car(&rest)?;
+
+                        let vec_val = eval(vec_expr, env)?;
+                        let idx_val = eval(idx_expr, env)?;
+
+                        match (vec_val, idx_val) {
+                            (
+                                Value::Vector(vec),
+                                Value::Atom(AtomType::Number(NumericType::Int(idx))),
+                            ) => {
+                                if idx < 0 || idx >= vec.elements.len() as i64 {
+                                    return Err(format!(
+                                        "vector-ref: index {idx} out of bounds (length {})",
+                                        vec.elements.len()
+                                    ));
+                                }
+                                return Ok(vec.elements[idx as usize].clone());
+                            }
+                            (Value::Vector(_), _) => {
+                                return Err("vector-ref: index must be an integer".to_string());
+                            }
+                            _ => {
+                                return Err(
+                                    "vector-ref: first argument must be a vector".to_string()
+                                );
+                            }
+                        }
                     }
                     _ => {}
                 }

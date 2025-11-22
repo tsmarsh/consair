@@ -5,6 +5,6 @@ pub mod parser;
 
 // Re-export commonly used items for convenience
 pub use interpreter::{Environment, eval};
-pub use language::{AtomType, ConsCell, LambdaCell, Value, cons};
+pub use language::{AtomType, ConsCell, LambdaCell, Value, VectorValue, cons};
 pub use numeric::NumericType;
 pub use parser::parse;

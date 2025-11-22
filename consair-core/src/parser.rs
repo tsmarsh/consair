@@ -1,5 +1,6 @@
-use crate::language::{AtomType, Value, cons};
+use crate::language::{AtomType, Value, VectorValue, cons};
 use crate::numeric::NumericType;
+use std::rc::Rc;
 
 // ============================================================================
 // Parser
@@ -10,6 +11,8 @@ enum Token {
     LParen,
     RParen,
     Quote,
+    VectorStart, // <<
+    VectorEnd,   // >>
     Symbol(String),
     Number(NumericType),
 }
@@ -31,6 +34,34 @@ fn tokenize(input: &str) -> Vec<Token> {
             '\'' => {
                 tokens.push(Token::Quote);
                 chars.next();
+            }
+            '<' => {
+                chars.next();
+                if let Some(&'<') = chars.peek() {
+                    chars.next();
+                    tokens.push(Token::VectorStart);
+                } else if let Some(&'=') = chars.peek() {
+                    // This is <=, parse as symbol
+                    chars.next();
+                    tokens.push(Token::Symbol("<=".to_string()));
+                } else {
+                    // Single '<' as a symbol
+                    tokens.push(Token::Symbol("<".to_string()));
+                }
+            }
+            '>' => {
+                chars.next();
+                if let Some(&'>') = chars.peek() {
+                    chars.next();
+                    tokens.push(Token::VectorEnd);
+                } else if let Some(&'=') = chars.peek() {
+                    // This is >=, parse as symbol
+                    chars.next();
+                    tokens.push(Token::Symbol(">=".to_string()));
+                } else {
+                    // Single '>' as a symbol
+                    tokens.push(Token::Symbol(">".to_string()));
+                }
             }
             ch if ch.is_whitespace() => {
                 chars.next();
@@ -151,6 +182,26 @@ fn parse_tokens(tokens: &[Token]) -> Result<(Value, usize), String> {
             );
             Ok((quote_list, consumed + 1))
         }
+        Token::VectorStart => {
+            let mut values = Vec::new();
+            let mut i = 1;
+
+            while i < tokens.len() {
+                if matches!(tokens[i], Token::VectorEnd) {
+                    return Ok((
+                        Value::Vector(Rc::new(VectorValue { elements: values })),
+                        i + 1,
+                    ));
+                }
+
+                let (value, consumed) = parse_tokens(&tokens[i..])?;
+                values.push(value);
+                i += consumed;
+            }
+
+            Err("Unclosed vector (missing >>)".to_string())
+        }
+        Token::VectorEnd => Err("Unexpected >>".to_string()),
         Token::LParen => {
             let mut values = Vec::new();
             let mut i = 1;

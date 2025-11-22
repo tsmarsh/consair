@@ -43,11 +43,17 @@ pub struct LambdaCell {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct VectorValue {
+    pub elements: Vec<Value>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Atom(AtomType),
     Cons(Rc<ConsCell>),
     Nil,
     Lambda(Rc<LambdaCell>),
+    Vector(Rc<VectorValue>),
 }
 
 // ============================================================================
@@ -81,6 +87,16 @@ impl fmt::Display for Value {
                 write!(f, ")")
             }
             Value::Lambda(_) => write!(f, "<lambda>"),
+            Value::Vector(vec) => {
+                write!(f, "<<")?;
+                for (i, elem) in vec.elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{elem}")?;
+                }
+                write!(f, ">>")
+            }
         }
     }
 }

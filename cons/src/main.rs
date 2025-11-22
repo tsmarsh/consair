@@ -90,11 +90,11 @@ fn parse_next_expr(input: &str) -> Result<(consair::Value, &str), String> {
     let chars = trimmed.chars().enumerate();
     let mut end_pos = 0;
 
-    // Handle atoms (non-list expressions)
-    if !trimmed.starts_with('(') && !trimmed.starts_with('\'') {
+    // Handle atoms (non-list/non-vector expressions)
+    if !trimmed.starts_with('(') && !trimmed.starts_with('\'') && !trimmed.starts_with('<') {
         // Find the end of the atom (whitespace or paren)
         for (i, ch) in chars {
-            if ch.is_whitespace() || ch == '(' || ch == ')' {
+            if ch.is_whitespace() || ch == '(' || ch == ')' || ch == '<' || ch == '>' {
                 end_pos = i;
                 break;
             }
@@ -104,15 +104,34 @@ fn parse_next_expr(input: &str) -> Result<(consair::Value, &str), String> {
             end_pos = trimmed.len();
         }
     } else {
-        // Handle lists and quoted expressions
-        for (i, ch) in chars {
+        // Handle lists, vectors, and quoted expressions
+        let mut vec_depth = 0;
+        let mut chars_iter = trimmed.chars().enumerate().peekable();
+
+        while let Some((i, ch)) = chars_iter.next() {
             match ch {
                 '(' if !in_string => depth += 1,
                 ')' if !in_string => {
                     depth -= 1;
-                    if depth == 0 {
+                    if depth == 0 && vec_depth == 0 {
                         end_pos = i + 1;
                         break;
+                    }
+                }
+                '<' if !in_string => {
+                    if let Some(&(_, '<')) = chars_iter.peek() {
+                        vec_depth += 1;
+                        chars_iter.next(); // consume second <
+                    }
+                }
+                '>' if !in_string => {
+                    if let Some(&(_, '>')) = chars_iter.peek() {
+                        vec_depth -= 1;
+                        chars_iter.next(); // consume second >
+                        if vec_depth == 0 && depth == 0 {
+                            end_pos = i + 2;
+                            break;
+                        }
                     }
                 }
                 '\'' if !in_string => {
