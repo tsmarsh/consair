@@ -78,9 +78,57 @@ cargo run --release
 ./target/release/cons
 ```
 
+#### Run a Lisp file
+```bash
+./target/release/cons examples/simple.lisp
+# or with cargo
+cargo run --release -- examples/simple.lisp
+```
+
 #### Run tests
 ```bash
 cargo test
+```
+
+## Usage
+
+### Interactive REPL
+
+Start the REPL with no arguments:
+```bash
+cons
+```
+
+### Execute Lisp Files
+
+Run a file containing Lisp expressions:
+```bash
+cons program.lisp
+```
+
+The interpreter will evaluate all expressions in the file and print the result of the last expression.
+
+### Example Files
+
+The `examples/` directory contains sample Lisp programs:
+
+- `simple.lisp` - Basic operations (cons, car, cdr, lambda)
+- `list-ops.lisp` - List manipulation examples
+- `closures.lisp` - Closure demonstration
+- `factorial.lisp` - Factorial using recursion
+
+Try them:
+```bash
+cons examples/simple.lisp
+cons examples/closures.lisp
+```
+
+### Command-Line Options
+
+```bash
+cons              # Start interactive REPL
+cons <file.lisp>  # Run a Lisp file
+cons --help       # Show help message
 ```
 
 ## Example Usage

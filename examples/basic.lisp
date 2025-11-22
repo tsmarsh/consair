@@ -1,0 +1,6 @@
+(label identity (lambda (x) x))
+(identity 42)
+(label pair (lambda (a b) (cons a b)))
+(pair 1 2)
+(label append (lambda (x y) (cond ((atom x) y) (t (cons (car x) (append (cdr x) y))))))
+(append '(1 2) '(3 4))

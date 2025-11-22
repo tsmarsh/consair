@@ -1,0 +1,5 @@
+(cons 1 2)
+(car '(1 2 3))
+(cdr '(1 2 3))
+(label identity (lambda (x) x))
+(identity 42)

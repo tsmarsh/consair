@@ -1,0 +1,8 @@
+(cons 1 (cons 2 (cons 3 nil)))
+(car '(1 2 3))
+(cdr '(1 2 3))
+(cons 'a '(b c))
+(atom 'x)
+(atom '(1 2))
+(eq 'a 'a)
+(eq 'a 'b)
