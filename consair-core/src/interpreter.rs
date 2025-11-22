@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::language::{AtomType, LambdaCell, Value, car, cdr, cons, eq, is_atom};
+use crate::numeric::NumericType;
 
 // ============================================================================
 // Environment
 // ============================================================================
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Environment {
     bindings: Rc<HashMap<String, Value>>,
     parent: Option<Rc<Environment>>,
@@ -176,6 +177,35 @@ pub fn eval(expr: Value, env: &mut Environment) -> Result<Value, String> {
                             return Err("label: first argument must be a symbol".to_string());
                         }
                     }
+                    // Arithmetic operations
+                    "+" => {
+                        return eval_arithmetic("+", &cell.cdr, env, |a, b| a.add(b));
+                    }
+                    "-" => {
+                        return eval_arithmetic("-", &cell.cdr, env, |a, b| a.sub(b));
+                    }
+                    "*" => {
+                        return eval_arithmetic("*", &cell.cdr, env, |a, b| a.mul(b));
+                    }
+                    "/" => {
+                        return eval_arithmetic("/", &cell.cdr, env, |a, b| a.div(b));
+                    }
+                    // Comparison operations
+                    "<" => {
+                        return eval_comparison("<", &cell.cdr, env, |a, b| a < b);
+                    }
+                    ">" => {
+                        return eval_comparison(">", &cell.cdr, env, |a, b| a > b);
+                    }
+                    "<=" => {
+                        return eval_comparison("<=", &cell.cdr, env, |a, b| a <= b);
+                    }
+                    ">=" => {
+                        return eval_comparison(">=", &cell.cdr, env, |a, b| a >= b);
+                    }
+                    "=" => {
+                        return eval_comparison("=", &cell.cdr, env, |a, b| a == b);
+                    }
                     _ => {}
                 }
             }
@@ -210,4 +240,72 @@ pub fn eval(expr: Value, env: &mut Environment) -> Result<Value, String> {
             }
         }
     }
+}
+
+// ============================================================================
+// Helper Functions for Arithmetic and Comparison
+// ============================================================================
+
+fn eval_arithmetic<F>(
+    op_name: &str,
+    args: &Value,
+    env: &mut Environment,
+    op: F,
+) -> Result<Value, String>
+where
+    F: Fn(&NumericType, &NumericType) -> Result<NumericType, String>,
+{
+    let arg1 = car(args)?;
+    let rest = cdr(args)?;
+    let arg2 = car(&rest)?;
+
+    let val1 = eval(arg1, env)?;
+    let val2 = eval(arg2, env)?;
+
+    // Extract numeric values
+    let num1 = match val1 {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!("{op_name}: expected number, got {val1}")),
+    };
+
+    let num2 = match val2 {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!("{op_name}: expected number, got {val2}")),
+    };
+
+    // Perform operation
+    let result = op(&num1, &num2)?;
+    Ok(Value::Atom(AtomType::Number(result)))
+}
+
+fn eval_comparison<F>(
+    op_name: &str,
+    args: &Value,
+    env: &mut Environment,
+    op: F,
+) -> Result<Value, String>
+where
+    F: Fn(&NumericType, &NumericType) -> bool,
+{
+    let arg1 = car(args)?;
+    let rest = cdr(args)?;
+    let arg2 = car(&rest)?;
+
+    let val1 = eval(arg1, env)?;
+    let val2 = eval(arg2, env)?;
+
+    // Extract numeric values
+    let num1 = match val1 {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!("{op_name}: expected number, got {val1}")),
+    };
+
+    let num2 = match val2 {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!("{op_name}: expected number, got {val2}")),
+    };
+
+    // Perform comparison
+    let result = op(&num1, &num2);
+    Ok(Value::Atom(AtomType::Bool(result)))
 }

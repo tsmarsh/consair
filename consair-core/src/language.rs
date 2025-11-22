@@ -2,32 +2,47 @@ use std::fmt;
 use std::rc::Rc;
 
 use crate::interpreter::Environment;
+use crate::numeric::NumericType;
 
 // ============================================================================
 // Core Type System
 // ============================================================================
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum AtomType {
     Symbol(String),
-    Number(i64),
+    Number(NumericType),
     Bool(bool),
 }
 
-#[derive(Clone)]
+// Implement PartialEq manually to handle NumericType comparison
+impl PartialEq for AtomType {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (AtomType::Symbol(a), AtomType::Symbol(b)) => a == b,
+            (AtomType::Number(a), AtomType::Number(b)) => a == b,
+            (AtomType::Bool(a), AtomType::Bool(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for AtomType {}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct ConsCell {
     pub car: Value,
     pub cdr: Value,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct LambdaCell {
     pub params: Vec<String>,
     pub body: Value,
     pub env: Environment,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Atom(AtomType),
     Cons(Rc<ConsCell>),

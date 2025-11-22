@@ -1,4 +1,5 @@
 use crate::language::{AtomType, Value, cons};
+use crate::numeric::NumericType;
 
 // ============================================================================
 // Parser
@@ -10,7 +11,7 @@ enum Token {
     RParen,
     Quote,
     Symbol(String),
-    Number(i64),
+    Number(NumericType),
 }
 
 fn tokenize(input: &str) -> Vec<Token> {
@@ -40,18 +41,73 @@ fn tokenize(input: &str) -> Vec<Token> {
                     num.push(ch);
                     chars.next();
                 }
+
+                // Collect digits and check for decimal point or slash
+                let mut has_dot = false;
+                let mut has_slash = false;
+
                 while let Some(&ch) = chars.peek() {
                     if ch.is_numeric() {
                         num.push(ch);
                         chars.next();
+                    } else if ch == '.' && !has_dot && !has_slash {
+                        has_dot = true;
+                        num.push(ch);
+                        chars.next();
+                    } else if ch == '/' && !has_dot && !has_slash {
+                        has_slash = true;
+                        num.push(ch);
+                        chars.next();
+                    } else if (ch == 'e' || ch == 'E') && !has_slash {
+                        // Scientific notation for floats (e.g., "2e-5" or "1.5e10")
+                        num.push(ch);
+                        chars.next();
+                        // Handle optional +/- after e
+                        if let Some(&sign) = chars.peek() {
+                            if sign == '+' || sign == '-' {
+                                num.push(sign);
+                                chars.next();
+                            }
+                        }
+                        // Mark as float since we have scientific notation
+                        has_dot = true;
                     } else {
                         break;
                     }
                 }
-                if let Ok(n) = num.parse::<i64>() {
-                    tokens.push(Token::Number(n));
+
+                // Parse the number based on its format
+                if has_slash {
+                    // Ratio: "5/2"
+                    let parts: Vec<&str> = num.split('/').collect();
+                    if parts.len() == 2 {
+                        if let (Ok(numerator), Ok(denominator)) =
+                            (parts[0].parse::<i64>(), parts[1].parse::<i64>())
+                        {
+                            match NumericType::make_ratio(numerator, denominator) {
+                                Ok(ratio) => tokens.push(Token::Number(ratio)),
+                                Err(_) => tokens.push(Token::Symbol(num)),
+                            }
+                        } else {
+                            tokens.push(Token::Symbol(num));
+                        }
+                    } else {
+                        tokens.push(Token::Symbol(num));
+                    }
+                } else if has_dot || num.contains('e') || num.contains('E') {
+                    // Float: "3.14" or "1e-5"
+                    if let Ok(f) = num.parse::<f64>() {
+                        tokens.push(Token::Number(NumericType::Float(f)));
+                    } else {
+                        tokens.push(Token::Symbol(num));
+                    }
                 } else {
-                    tokens.push(Token::Symbol(num));
+                    // Integer: "42"
+                    if let Ok(n) = num.parse::<i64>() {
+                        tokens.push(Token::Number(NumericType::Int(n)));
+                    } else {
+                        tokens.push(Token::Symbol(num));
+                    }
                 }
             }
             _ => {
@@ -77,7 +133,7 @@ fn parse_tokens(tokens: &[Token]) -> Result<(Value, usize), String> {
     }
 
     match &tokens[0] {
-        Token::Number(n) => Ok((Value::Atom(AtomType::Number(*n)), 1)),
+        Token::Number(n) => Ok((Value::Atom(AtomType::Number(n.clone())), 1)),
         Token::Symbol(s) => {
             if s == "nil" {
                 Ok((Value::Nil, 1))
