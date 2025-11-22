@@ -1,0 +1,17 @@
+[package]
+name = "consair-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Core library for Consair - Minimal Lisp based on McCarthy's 1960 paper"
+readme = "../README.md"
+keywords = ["lisp", "interpreter", "functional", "mccarthy"]
+categories = ["compilers", "development-tools"]
+repository = "https://github.com/tsmarsh/consair"
+
+[dependencies]
+
+[lib]
+name = "consair"
+path = "src/lib.rs"

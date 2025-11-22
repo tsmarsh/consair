@@ -1,19 +1,15 @@
-[package]
-name = "consair"
+[workspace]
+members = [
+    "consair-core",
+    "cons",
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 authors = ["Claude Code"]
-description = "Minimal Lisp interpreter based on McCarthy's 1960 paper, using Rust's Rc for memory management"
-readme = "README.md"
-keywords = ["lisp", "interpreter", "functional", "mccarthy"]
-categories = ["compilers", "development-tools"]
+license = "MIT OR Apache-2.0"
 
-[dependencies]
-
-[lib]
-name = "consair"
-path = "src/lib.rs"
-
-[[bin]]
-name = "cons"
-path = "src/main.rs"
+[workspace.dependencies]
+consair-core = { path = "consair-core" }

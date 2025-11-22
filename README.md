@@ -259,35 +259,51 @@ Both results share the same underlying cons cells for `(3 4)`.
 
 ## Architecture
 
-The implementation is organized into clean, separated modules:
+The project is organized as a Cargo workspace with two main components:
 
 ```
-src/
-├── lib.rs           # Module exports and public API
-├── language.rs      # Core type system and primitives
-│   ├── Value, AtomType, ConsCell, LambdaCell
-│   ├── Display implementation
-│   └── Primitives: cons, car, cdr, eq, is_atom
-├── parser.rs        # Tokenizer and parser
-│   ├── Token types
-│   ├── tokenize() - string → tokens
-│   └── parse() - tokens → AST
-├── interpreter.rs   # Evaluator and environment
-│   ├── Environment - variable bindings
-│   └── eval() - evaluates expressions
-└── main.rs          # REPL interface
-
-tests/
-└── integration_tests.rs
+consair/
+├── Cargo.toml           # Workspace definition
+├── consair-core/        # Core library
+│   ├── Cargo.toml
+│   ├── src/
+│   │   ├── lib.rs           # Module exports and public API
+│   │   ├── language.rs      # Core type system and primitives
+│   │   │   ├── Value, AtomType, ConsCell, LambdaCell
+│   │   │   ├── Display implementation
+│   │   │   └── Primitives: cons, car, cdr, eq, is_atom
+│   │   ├── parser.rs        # Tokenizer and parser
+│   │   │   ├── Token types
+│   │   │   ├── tokenize() - string → tokens
+│   │   │   └── parse() - tokens → AST
+│   │   └── interpreter.rs   # Evaluator and environment
+│   │       ├── Environment - variable bindings
+│   │       └── eval() - evaluates expressions
+│   └── tests/
+│       └── integration_tests.rs
+└── cons/                # Interpreter executable
+    ├── Cargo.toml
+    └── src/
+        └── main.rs      # REPL and file executor
 ```
 
-### Module Responsibilities
+### Component Responsibilities
 
+#### `consair-core` (Library)
+The core Lisp interpreter library that can be embedded in other applications:
 - **language.rs**: Defines the core Lisp data types and primitive operations
 - **parser.rs**: Converts s-expressions into the AST representation
 - **interpreter.rs**: Evaluates AST nodes in the context of an environment
 - **lib.rs**: Re-exports public API for external use
-- **main.rs**: Provides an interactive REPL for users
+
+#### `cons` (Executable)
+The command-line interpreter for running Lisp programs:
+- **main.rs**: Interactive REPL and file execution
+
+This workspace structure makes it easy to:
+- Use `consair-core` as a library in other Rust projects
+- Add new executables (formatters, debuggers, etc.) alongside `cons`
+- Maintain a clean separation between library and CLI concerns
 
 ## Testing
 

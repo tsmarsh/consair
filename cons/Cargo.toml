@@ -1,0 +1,18 @@
+[package]
+name = "cons"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Consair interpreter - Interactive REPL and file executor for Consair Lisp"
+readme = "../README.md"
+keywords = ["lisp", "interpreter", "repl"]
+categories = ["command-line-utilities"]
+repository = "https://github.com/tsmarsh/consair"
+
+[dependencies]
+consair-core = { workspace = true }
+
+[[bin]]
+name = "cons"
+path = "src/main.rs"
