@@ -3,6 +3,7 @@
 //! This module provides utility functions for implementing native Rust functions
 //! that can be called from Lisp code.
 
+use crate::interner::InternedSymbol;
 use crate::language::{AtomType, StringType, SymbolType, Value, cons};
 use crate::numeric::NumericType;
 
@@ -57,7 +58,7 @@ pub fn extract_bytes(value: &Value) -> Result<Vec<u8>, String> {
 /// Extract a symbol name from a Value
 pub fn extract_symbol(value: &Value) -> Result<String, String> {
     match value {
-        Value::Atom(AtomType::Symbol(SymbolType::Symbol(s))) => Ok(s.clone()),
+        Value::Atom(AtomType::Symbol(SymbolType::Symbol(s))) => Ok(s.resolve()),
         _ => Err(format!("Expected symbol, got {value}")),
     }
 }
@@ -210,7 +211,9 @@ pub fn make_keyword(name: impl Into<String>) -> Value {
 
 /// Create a symbol Value
 pub fn make_symbol(name: impl Into<String>) -> Value {
-    Value::Atom(AtomType::Symbol(SymbolType::Symbol(name.into())))
+    Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(
+        &name.into(),
+    ))))
 }
 
 /// Create a bytes Value

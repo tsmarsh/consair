@@ -1,4 +1,6 @@
-use consair::{AtomType, Environment, NumericType, Value, eval, language, parse};
+use consair::{
+    AtomType, Environment, NumericType, Value, eval, interner::InternedSymbol, language, parse,
+};
 
 // ============================================================================
 // Numeric Type Tests
@@ -487,7 +489,9 @@ fn test_ratio_in_conditional() {
     let result = eval(expr, &mut env).unwrap();
 
     match result {
-        Value::Atom(AtomType::Symbol(language::SymbolType::Symbol(s))) => assert_eq!(s, "yes"),
+        Value::Atom(AtomType::Symbol(language::SymbolType::Symbol(s))) => {
+            assert_eq!(s, InternedSymbol::new("yes"))
+        }
         _ => panic!("Expected symbol 'yes', got {result:?}"),
     }
 }

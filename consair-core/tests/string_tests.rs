@@ -1,4 +1,5 @@
 use consair::*;
+use interner::InternedSymbol;
 use language::{AtomType, StringType, SymbolType};
 
 #[test]
@@ -107,7 +108,7 @@ fn test_simple_keyword() {
     let result = parse(":name").unwrap();
     match result {
         Value::Atom(AtomType::Symbol(SymbolType::Keyword { name, namespace })) => {
-            assert_eq!(name, "name");
+            assert_eq!(name, InternedSymbol::new("name"));
             assert_eq!(namespace, None);
         }
         _ => panic!("Expected keyword :name, got {result:?}"),
@@ -119,8 +120,8 @@ fn test_namespaced_keyword() {
     let result = parse(":user/name").unwrap();
     match result {
         Value::Atom(AtomType::Symbol(SymbolType::Keyword { name, namespace })) => {
-            assert_eq!(name, "name");
-            assert_eq!(namespace, Some("user".to_string()));
+            assert_eq!(name, InternedSymbol::new("name"));
+            assert_eq!(namespace, Some(InternedSymbol::new("user")));
         }
         _ => panic!("Expected keyword :user/name, got {result:?}"),
     }
@@ -131,8 +132,8 @@ fn test_auto_namespaced_keyword() {
     let result = parse("::name").unwrap();
     match result {
         Value::Atom(AtomType::Symbol(SymbolType::Keyword { name, namespace })) => {
-            assert_eq!(name, "name");
-            assert_eq!(namespace, Some("__AUTO__".to_string()));
+            assert_eq!(name, InternedSymbol::new("name"));
+            assert_eq!(namespace, Some(InternedSymbol::new("__AUTO__")));
         }
         _ => panic!("Expected auto-namespaced keyword, got {result:?}"),
     }
@@ -217,7 +218,7 @@ fn test_interpolated_string_with_expression() {
             match &parts[1] {
                 language::StringPart::Expression(expr) => match expr.as_ref() {
                     Value::Atom(AtomType::Symbol(SymbolType::Symbol(s))) => {
-                        assert_eq!(s, "name");
+                        assert_eq!(s, &InternedSymbol::new("name"));
                     }
                     _ => panic!("Expected symbol 'name'"),
                 },
@@ -266,7 +267,7 @@ fn test_keywords_are_self_evaluating() {
 
     match result {
         Value::Atom(AtomType::Symbol(SymbolType::Keyword { name, namespace })) => {
-            assert_eq!(name, "test");
+            assert_eq!(name, InternedSymbol::new("test"));
             assert_eq!(namespace, None);
         }
         _ => panic!("Expected keyword to be self-evaluating, got {result:?}"),

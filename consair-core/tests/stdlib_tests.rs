@@ -44,7 +44,7 @@ fn alist_get(alist: &Value, key_name: &str) -> Option<Value> {
     while let Value::Cons(ref outer_cell) = current {
         if let Value::Cons(ref pair) = outer_cell.car {
             if let Value::Atom(AtomType::Symbol(SymbolType::Keyword { name, .. })) = &pair.car {
-                if name == key_name {
+                if name.with_str(|s| s == key_name) {
                     return Some(pair.cdr.clone());
                 }
             }

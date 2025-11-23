@@ -1,4 +1,7 @@
-use consair::{AtomType, Environment, NumericType, Value, VectorValue, eval, language, parse};
+use consair::{
+    AtomType, Environment, NumericType, Value, VectorValue, eval, interner::InternedSymbol,
+    language, parse,
+};
 use std::sync::Arc;
 
 // ============================================================================
@@ -87,19 +90,19 @@ fn test_vector_parse_symbols() {
             assert_eq!(
                 vec.elements[0],
                 Value::Atom(AtomType::Symbol(language::SymbolType::Symbol(
-                    "a".to_string()
+                    InternedSymbol::new("a")
                 )))
             );
             assert_eq!(
                 vec.elements[1],
                 Value::Atom(AtomType::Symbol(language::SymbolType::Symbol(
-                    "b".to_string()
+                    InternedSymbol::new("b")
                 )))
             );
             assert_eq!(
                 vec.elements[2],
                 Value::Atom(AtomType::Symbol(language::SymbolType::Symbol(
-                    "c".to_string()
+                    InternedSymbol::new("c")
                 )))
             );
         }
@@ -150,7 +153,7 @@ fn test_vector_display_mixed() {
             Value::Atom(AtomType::Number(NumericType::Int(1))),
             Value::Atom(AtomType::Number(NumericType::Float(2.5))),
             Value::Atom(AtomType::Symbol(language::SymbolType::Symbol(
-                "x".to_string(),
+                InternedSymbol::new("x"),
             ))),
         ],
     }));

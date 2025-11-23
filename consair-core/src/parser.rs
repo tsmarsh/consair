@@ -1,3 +1,4 @@
+use crate::interner::InternedSymbol;
 use crate::language::{AtomType, StringPart, StringType, SymbolType, Value, VectorValue, cons};
 use crate::numeric::NumericType;
 use regex::Regex;
@@ -588,11 +589,14 @@ impl Lexer {
         let symbol = if auto_namespaced {
             // Auto-namespace will be resolved at runtime based on current module
             SymbolType::Keyword {
-                name,
-                namespace: Some("__AUTO__".to_string()), // Placeholder
+                name: InternedSymbol::new(&name),
+                namespace: Some(InternedSymbol::new("__AUTO__")), // Placeholder
             }
         } else {
-            SymbolType::Keyword { name, namespace }
+            SymbolType::Keyword {
+                name: InternedSymbol::new(&name),
+                namespace: namespace.map(|ns| InternedSymbol::new(&ns)),
+            }
         };
 
         Ok(Token::Keyword(symbol))
@@ -830,7 +834,7 @@ impl<'a> Parser<'a> {
                 } else if s == "t" {
                     Value::Atom(AtomType::Bool(true))
                 } else {
-                    Value::Atom(AtomType::Symbol(SymbolType::Symbol(s.clone())))
+                    Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(s))))
                 };
                 self.advance()?;
                 Ok(value)
@@ -844,7 +848,9 @@ impl<'a> Parser<'a> {
                 self.advance()?;
                 let quoted = self.parse_expression()?;
                 Ok(cons(
-                    Value::Atom(AtomType::Symbol(SymbolType::Symbol("quote".to_string()))),
+                    Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(
+                        "quote",
+                    )))),
                     cons(quoted, Value::Nil),
                 ))
             }

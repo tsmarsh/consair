@@ -2,6 +2,7 @@ use regex::Regex;
 use std::fmt;
 use std::sync::Arc;
 
+use crate::interner::InternedSymbol;
 use crate::interpreter::Environment;
 use crate::numeric::NumericType;
 
@@ -95,15 +96,15 @@ pub enum StringPart {
 /// Symbol and keyword types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SymbolType {
-    /// Regular symbol (needs evaluation)
+    /// Regular symbol (needs evaluation, now interned)
     /// Syntax: 'symbol or symbol
-    Symbol(String),
+    Symbol(InternedSymbol),
 
-    /// Keyword (self-evaluating, interned)
+    /// Keyword (self-evaluating, also interned)
     /// Syntax: :keyword or :namespace/keyword
     Keyword {
-        name: String,
-        namespace: Option<String>,
+        name: InternedSymbol,
+        namespace: Option<InternedSymbol>,
     },
 }
 
@@ -111,7 +112,7 @@ impl SymbolType {
     /// Create a simple keyword
     pub fn keyword(name: impl Into<String>) -> Self {
         SymbolType::Keyword {
-            name: name.into(),
+            name: InternedSymbol::new(&name.into()),
             namespace: None,
         }
     }
@@ -119,24 +120,16 @@ impl SymbolType {
     /// Create a namespaced keyword
     pub fn namespaced_keyword(namespace: impl Into<String>, name: impl Into<String>) -> Self {
         SymbolType::Keyword {
-            name: name.into(),
-            namespace: Some(namespace.into()),
-        }
-    }
-
-    /// Get the name as a string slice (for symbols only, panics for keywords)
-    pub fn as_str(&self) -> &str {
-        match self {
-            SymbolType::Symbol(s) => s.as_str(),
-            SymbolType::Keyword { .. } => panic!("Cannot use as_str() on keyword"),
+            name: InternedSymbol::new(&name.into()),
+            namespace: Some(InternedSymbol::new(&namespace.into())),
         }
     }
 
     /// Get the name as a String (for symbols only)
-    pub fn into_string(self) -> String {
+    pub fn resolve(&self) -> String {
         match self {
-            SymbolType::Symbol(s) => s,
-            SymbolType::Keyword { .. } => panic!("Cannot use into_string() on keyword"),
+            SymbolType::Symbol(s) => s.resolve(),
+            SymbolType::Keyword { .. } => panic!("Cannot use resolve() on keyword"),
         }
     }
 
@@ -184,7 +177,7 @@ pub struct ConsCell {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LambdaCell {
-    pub params: Vec<String>,
+    pub params: Vec<InternedSymbol>,
     pub body: Value,
     pub env: Environment,
 }
@@ -292,13 +285,13 @@ impl fmt::Display for SymbolType {
             SymbolType::Keyword {
                 name,
                 namespace: Some(ns),
-            } => {
-                if ns == "__AUTO__" {
+            } => ns.with_str(|ns_str| {
+                if ns_str == "__AUTO__" {
                     write!(f, "::{name}")
                 } else {
                     write!(f, ":{ns}/{name}")
                 }
-            }
+            }),
         }
     }
 }

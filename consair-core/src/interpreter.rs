@@ -28,10 +28,10 @@ impl Environment {
         }
     }
 
-    fn extend(&self, params: &[String], args: &[Value]) -> Self {
+    fn extend(&self, params: &[crate::interner::InternedSymbol], args: &[Value]) -> Self {
         let mut bindings = HashMap::new();
         for (param, arg) in params.iter().zip(args.iter()) {
-            bindings.insert(param.clone(), arg.clone());
+            bindings.insert(param.resolve(), arg.clone());
         }
         Environment {
             bindings: Arc::new(bindings),
@@ -93,9 +93,11 @@ fn eval_loop(mut expr: Value, env: &mut Environment, depth: usize) -> Result<Val
             // Symbol lookup
             Value::Atom(AtomType::Symbol(ref sym)) => {
                 return match sym {
-                    SymbolType::Symbol(name) => current_env
-                        .lookup(name)
-                        .ok_or_else(|| format!("Unbound symbol: {name}")),
+                    SymbolType::Symbol(name) => name.with_str(|s| {
+                        current_env
+                            .lookup(s)
+                            .ok_or_else(|| format!("Unbound symbol: {name}"))
+                    }),
                     SymbolType::Keyword { .. } => Ok(expr),
                 };
             }
@@ -109,7 +111,8 @@ fn eval_loop(mut expr: Value, env: &mut Environment, depth: usize) -> Result<Val
 
                 // Special forms
                 if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(name))) = operator {
-                    match name.as_str() {
+                    let sym_str = name.resolve();
+                    match sym_str.as_str() {
                         "quote" => {
                             let arg = car(&cell.cdr)?;
                             return Ok(arg);
@@ -187,7 +190,7 @@ fn eval_loop(mut expr: Value, env: &mut Environment, depth: usize) -> Result<Val
                                 if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(name))) =
                                     &param_cell.car
                                 {
-                                    params.push(name.clone());
+                                    params.push(*name);
                                 } else {
                                     return Err("lambda parameters must be symbols".to_string());
                                 }
@@ -208,7 +211,7 @@ fn eval_loop(mut expr: Value, env: &mut Environment, depth: usize) -> Result<Val
                                 name_expr
                             {
                                 let fn_val = eval_loop(fn_expr, &mut current_env, depth + 1)?;
-                                env.define(name.clone(), fn_val.clone());
+                                env.define(name.resolve(), fn_val.clone());
                                 return Ok(fn_val);
                             } else {
                                 return Err("label: first argument must be a symbol".to_string());
