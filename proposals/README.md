@@ -12,7 +12,7 @@ This directory contains detailed implementation prompts for improving the Consai
 ### 🟡 High Priority
 4. ~~[Optimize Environment Performance](04-optimize-environment-performance.md)~~ - ✅ **COMPLETED** (Arc::make_mut CoW optimization)
 5. ~~[Add String Interning](05-add-string-interning.md)~~ - ✅ **COMPLETED** (Global RwLock-based interner)
-6. [Split Parser Module](06-split-parser-module.md) - Better code organization
+6. ~~[Split Parser Module](06-split-parser-module.md)~~ - ✅ **COMPLETED** (Lexer/Parser separated into distinct modules)
 7. ~~[Implement Tail Call Optimization](07-implement-tail-call-optimization.md)~~ - ✅ **COMPLETED** (via proposal #3)
 8. [Add Property-Based Testing](08-add-property-based-tests.md) - Find edge cases automatically
 9. [Add Comprehensive Benchmarks](09-add-benchmarks.md) - Measure and track performance
