@@ -291,6 +291,18 @@ Both results share the same underlying cons cells for `(3 4)`.
 - **Other primitives**: No allocation, only read/compare existing values
 - **Deallocation**: Automatic when last `Arc` is dropped (atomic reference counting)
 
+### String Interning
+
+Consair uses **string interning** for all symbols and keywords to reduce memory usage and improve performance:
+
+- **Shared storage**: Identical symbols (e.g., multiple occurrences of `foo`) share the same underlying string storage
+- **Fast comparisons**: Symbol equality uses pointer comparison (O(1)) instead of string comparison
+- **Memory efficient**: Only one copy of each unique symbol is stored in memory
+- **Thread-safe**: Global `RwLock`-based interner allows safe sharing across threads
+- **Zero-copy symbols**: `InternedSymbol` implements `Copy`, eliminating cloning overhead
+
+Example benefit: A program with 1000 occurrences of the symbol `lambda` only stores the string "lambda" once in memory.
+
 ### Tail Call Optimization
 
 Consair implements **full tail call optimization (TCO)**, enabling unbounded recursion for tail-recursive functions:
@@ -423,6 +435,7 @@ This implementation achieves all design goals:
 ✅ Automatic memory management (no manual free)
 ✅ Can implement complex functions in terms of primitives
 ✅ Tail call optimization enables unbounded recursion
+✅ String interning for efficient symbol storage and comparison
 
 ## References
 
