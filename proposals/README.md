@@ -5,8 +5,8 @@ This directory contains detailed implementation prompts for improving the Consai
 ## Priority Levels
 
 ### 🔴 Critical (Do First)
-1. [Fix Main.rs Expression Parser Bug](01-fix-main-parser-bug.md) - String literals break expression parsing
-2. [Fix Numeric Overflow Bug](02-fix-numeric-overflow-bug.md) - Incorrect arithmetic on overflow
+1. ~~[Fix Main.rs Expression Parser Bug](01-fix-main-parser-bug.md)~~ - ✅ **COMPLETED**
+2. ~~[Fix Numeric Overflow Bug](02-fix-numeric-overflow-bug.md)~~ - ✅ **COMPLETED**
 3. [Add Recursion Depth Limit](03-add-recursion-depth-limit.md) - Prevent stack overflow crashes
 
 ### 🟡 High Priority

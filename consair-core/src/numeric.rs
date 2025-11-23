@@ -345,7 +345,7 @@ impl NumericType {
                 Self::make_ratio(num, *bd)
             }
             (Ratio(an, ad), Int(b)) => {
-                let num = match an.checked_sub(b.checked_mul(*ad).unwrap_or(i64::MAX)) {
+                let num = match b.checked_mul(*ad).and_then(|x| an.checked_sub(x)) {
                     Some(n) => n,
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
@@ -661,5 +661,69 @@ mod tests {
 
         assert_eq!(int_five, ratio_five);
         assert_eq!(int_five, float_five);
+    }
+
+    #[test]
+    fn test_ratio_minus_int_overflow() {
+        // Test the specific overflow case in Ratio - Int subtraction
+        // When b * ad overflows, we should promote to BigRatio
+
+        // Use large values that will cause overflow when multiplied
+        let large_num = i64::MAX / 2;
+        let large_denom = 3i64;
+        let large_int = i64::MAX / 2;
+
+        let ratio = NumericType::Ratio(large_num, large_denom);
+        let int = NumericType::Int(large_int);
+
+        // This should not panic and should return BigRatio
+        let result = ratio.sub(&int);
+        assert!(result.is_ok());
+
+        // Verify the result is BigRatio (since multiplication would overflow)
+        match result.unwrap() {
+            NumericType::BigRatio(_) => {
+                // Correct - promoted to BigRatio
+            }
+            other => panic!("Expected BigRatio for overflow case, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_ratio_minus_int_no_overflow() {
+        // Test case where Ratio - Int doesn't overflow
+        let ratio = NumericType::Ratio(10, 3);
+        let int = NumericType::Int(2);
+
+        // 10/3 - 2 = 10/3 - 6/3 = 4/3
+        let result = ratio.sub(&int).unwrap();
+        assert_eq!(result, NumericType::Ratio(4, 3));
+    }
+
+    #[test]
+    fn test_ratio_arithmetic_overflow_consistency() {
+        // Ensure all overflow paths work consistently
+        let large = i64::MAX / 2;
+
+        // Test Ratio + Int overflow
+        let r1 = NumericType::Ratio(large, 2);
+        let i1 = NumericType::Int(large);
+        assert!(r1.add(&i1).is_ok());
+
+        // Test Ratio - Int overflow
+        let r2 = NumericType::Ratio(large, 3);
+        let i2 = NumericType::Int(large);
+        assert!(r2.sub(&i2).is_ok());
+
+        // Both should produce BigRatio
+        match r1.add(&i1).unwrap() {
+            NumericType::BigRatio(_) => {}
+            other => panic!("Expected BigRatio, got {:?}", other),
+        }
+
+        match r2.sub(&i2).unwrap() {
+            NumericType::BigRatio(_) => {}
+            other => panic!("Expected BigRatio, got {:?}", other),
+        }
     }
 }
