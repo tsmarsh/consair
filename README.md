@@ -31,6 +31,16 @@ This implementation demonstrates how Rust's ownership system and `Rc` (reference
 - **lambda** - Creates anonymous functions with closures
 - **label** - Names functions (enables recursion)
 
+### Standard Library
+
+**I/O Functions:**
+- **print** / **println** - Output to stdout
+- **slurp** / **spit** - Read/write files (Clojure-style)
+
+**System Functions:**
+- **shell** - Execute shell commands, returns `((:out . "...") (:err . "...") (:exit . 0) (:success . t))`
+- **now** - Get current Unix timestamp
+
 ## Memory Model
 
 ```rust
@@ -124,11 +134,13 @@ The `examples/` directory contains sample Lisp programs:
 - `list-ops.lisp` - List manipulation examples
 - `closures.lisp` - Closure demonstration
 - `factorial.lisp` - Factorial using recursion
+- `stdlib.lisp` - Standard library functions (print, file I/O, shell, time)
 
 Try them:
 ```bash
 cons examples/simple.lisp
 cons examples/closures.lisp
+cons examples/stdlib.lisp
 ```
 
 ### Command-Line Options
@@ -232,6 +244,26 @@ While this minimal Lisp doesn't have built-in arithmetic, you can define recursi
 (1 2 3 4)
 ```
 
+### Standard Library Functions
+
+```lisp
+> (println "Hello, World!")
+Hello, World!
+nil
+
+> (spit "/tmp/test.txt" "Hello from Consair!")
+nil
+
+> (slurp "/tmp/test.txt")
+"Hello from Consair!"
+
+> (now)
+1763867177
+
+> (shell "echo hello")
+((:out . "hello\n") (:err . "") (:exit . 0) (:success . t))
+```
+
 ## Implementation Details
 
 ### Structure Sharing
@@ -260,10 +292,9 @@ Both results share the same underlying cons cells for `(3 4)`.
 
 ### Limitations
 
-1. **No arithmetic**: This is McCarthy's pure Lisp - use cons cells to represent numbers if needed
-2. **Circular references leak**: Don't create circular data structures
-3. **No tail call optimization**: Deep recursion will overflow the stack
-4. **Single-threaded**: `Rc` is not thread-safe (use `Arc` for concurrent access)
+1. **Circular references leak**: Don't create circular data structures
+2. **No tail call optimization**: Deep recursion will overflow the stack
+3. **Single-threaded**: `Rc` is not thread-safe (use `Arc` for concurrent access)
 
 ## Architecture
 
@@ -284,11 +315,22 @@ consair/
 │   │   │   ├── Token types
 │   │   │   ├── tokenize() - string → tokens
 │   │   │   └── parse() - tokens → AST
-│   │   └── interpreter.rs   # Evaluator and environment
-│   │       ├── Environment - variable bindings
-│   │       └── eval() - evaluates expressions
+│   │   ├── interpreter.rs   # Evaluator and environment
+│   │   │   ├── Environment - variable bindings
+│   │   │   └── eval() - evaluates expressions
+│   │   ├── native.rs        # Native function utilities
+│   │   │   ├── Value extraction helpers
+│   │   │   ├── Arity checking
+│   │   │   └── Value construction
+│   │   └── stdlib.rs        # Standard library
+│   │       ├── I/O: print, println
+│   │       ├── Files: slurp, spit
+│   │       ├── System: shell, now
+│   │       └── register_stdlib()
 │   └── tests/
-│       └── integration_tests.rs
+│       ├── integration_tests.rs
+│       ├── native_tests.rs
+│       └── stdlib_tests.rs
 └── cons/                # Interpreter executable
     ├── Cargo.toml
     └── src/
@@ -302,6 +344,8 @@ The core Lisp interpreter library that can be embedded in other applications:
 - **language.rs**: Defines the core Lisp data types and primitive operations
 - **parser.rs**: Converts s-expressions into the AST representation
 - **interpreter.rs**: Evaluates AST nodes in the context of an environment
+- **native.rs**: Utilities for implementing native Rust functions callable from Lisp
+- **stdlib.rs**: Standard library (I/O, file operations, shell, time)
 - **lib.rs**: Re-exports public API for external use
 
 #### `cons` (Executable)

@@ -1,0 +1,25 @@
+(println "=== Consair Standard Library Demo ===")
+(println)
+
+(println "1. Print Functions")
+(print "Using print: ")
+(print "no")
+(print " ")
+(println "newline")
+(println "Using println: automatic newline")
+(println)
+
+(println "2. File I/O (slurp/spit)")
+(spit "/tmp/consair-demo.txt" "Hello from Consair stdlib!")
+(print "Wrote to file, reading back: ")
+(println (slurp "/tmp/consair-demo.txt"))
+(println)
+
+(println "3. Time Function")
+(print "Current Unix timestamp: ")
+(println (now))
+(println)
+
+(println "4. Shell Execution")
+(println "Running: echo 'Phase 1 complete'")
+(shell "echo 'Phase 1 complete'")
