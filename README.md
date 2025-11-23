@@ -1,5 +1,9 @@
 # Consair - Minimal Lisp in Rust
 
+[![CI](https://github.com/tsmarsh/consair/workflows/CI/badge.svg)](https://github.com/tsmarsh/consair/actions)
+[![codecov](https://codecov.io/gh/tsmarsh/consair/branch/main/graph/badge.svg)](https://codecov.io/gh/tsmarsh/consair)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A minimal Lisp interpreter based on Paul Graham's exposition of McCarthy's 1960 paper, implemented in Rust using reference counting instead of traditional garbage collection.
 
 ## Design Philosophy

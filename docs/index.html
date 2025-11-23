@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Consair - A minimal Lisp interpreter based on McCarthy's 1960 paper, implemented in Rust">
+    <title>Consair - Minimal Lisp in Rust</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0d1117;
+            --bg-secondary: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #1f6feb;
+            --green: #3fb950;
+            --code-bg: #161b22;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 20px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2rem;
+            color: var(--text);
+        }
+
+        .badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        nav {
+            display: flex;
+            gap: 20px;
+        }
+
+        nav a {
+            color: var(--text);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        nav a:hover {
+            background: var(--bg);
+        }
+
+        .hero {
+            padding: 80px 0;
+            text-align: center;
+        }
+
+        .hero h2 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            background: linear-gradient(120deg, #58a6ff, #3fb950);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.3rem;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
+
+        .btn-secondary:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        .features {
+            padding: 60px 0;
+            background: var(--bg-secondary);
+        }
+
+        .features h3 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 50px;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+
+        .feature-card {
+            background: var(--bg);
+            padding: 30px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .feature-card h4 {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            color: var(--accent);
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+        }
+
+        .code-example {
+            padding: 60px 0;
+        }
+
+        .code-example h3 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 40px;
+        }
+
+        pre {
+            background: var(--code-bg);
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            margin: 20px 0;
+        }
+
+        code {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            color: var(--text);
+        }
+
+        .install {
+            padding: 60px 0;
+            background: var(--bg-secondary);
+        }
+
+        .install h3 {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 40px;
+        }
+
+        .install-steps {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .step {
+            background: var(--bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        .step h4 {
+            color: var(--green);
+            margin-bottom: 10px;
+        }
+
+        footer {
+            padding: 40px 0;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .spec-highlight {
+            display: inline-block;
+            background: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 768px) {
+            .hero h2 {
+                font-size: 2rem;
+            }
+
+            .hero p {
+                font-size: 1.1rem;
+            }
+
+            .cta-buttons {
+                flex-direction: column;
+            }
+
+            nav {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div>
+                    <h1>🚀 Consair</h1>
+                    <div class="badges">
+                        <img src="https://github.com/tsmarsh/consair/workflows/CI/badge.svg" alt="CI">
+                        <img src="https://codecov.io/gh/tsmarsh/consair/branch/main/graph/badge.svg" alt="Coverage">
+                        <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
+                    </div>
+                </div>
+                <nav>
+                    <a href="https://github.com/tsmarsh/consair">GitHub</a>
+                    <a href="https://github.com/tsmarsh/consair/releases">Releases</a>
+                    <a href="https://docs.rs/consair-core">Docs</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <h2>Minimal Lisp in Rust</h2>
+            <p>A pure implementation of McCarthy's 1960 Lisp using Rust's ownership system</p>
+            <p>Extended with strings, keywords, numbers, vectors, and modern conveniences</p>
+            <div class="cta-buttons">
+                <a href="https://github.com/tsmarsh/consair/releases/latest" class="btn btn-primary">Download Latest Release</a>
+                <a href="https://github.com/tsmarsh/consair" class="btn btn-secondary">View on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="features">
+        <div class="container">
+            <h3>Key Features</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>🎯 McCarthy's Seven Primitives</h4>
+                    <p>Pure implementation of <span class="spec-highlight">quote</span>, <span class="spec-highlight">atom</span>, <span class="spec-highlight">eq</span>, <span class="spec-highlight">car</span>, <span class="spec-highlight">cdr</span>, <span class="spec-highlight">cons</span>, and <span class="spec-highlight">cond</span></p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>🔢 Comprehensive Numeric Tower</h4>
+                    <p>Integers, floats, ratios, and arbitrary-precision big integers with automatic promotion</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>📝 Rich String System</h4>
+                    <p>Basic strings, raw strings, interpolated strings, multiline strings, regex patterns, and byte strings</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>🔑 Clojure-Style Keywords</h4>
+                    <p>Self-evaluating keywords with namespace support: <span class="spec-highlight">:keyword</span>, <span class="spec-highlight">:ns/keyword</span></p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>🧮 Vectors</h4>
+                    <p>Efficient indexed collections with <span class="spec-highlight">&lt;&lt; &gt;&gt;</span> syntax</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>♻️ Rc-Based Memory</h4>
+                    <p>Zero-copy structure sharing with automatic reference counting - no garbage collector needed</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>🔒 Memory Safe</h4>
+                    <p>100% safe Rust - passes the borrow checker without any unsafe blocks</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>λ Closures</h4>
+                    <p>First-class functions with lexical scoping and environment capture</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>🔄 Recursion</h4>
+                    <p>Named recursive functions via <span class="spec-highlight">label</span></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="code-example">
+        <div class="container">
+            <h3>Quick Examples</h3>
+
+            <pre><code>; Classic Lisp primitives
+> (car '(1 2 3))
+1
+
+> (cdr '(1 2 3))
+(2 3)
+
+> (cons 1 '(2 3))
+(1 2 3)</code></pre>
+
+            <pre><code>; String interpolation with expressions
+> $"Result: {(+ 2 3)}"
+"Result: 5"
+
+; Raw strings (no escapes)
+> #"C:\path\to\file"
+"C:\path\to\file"
+
+; Keywords
+> :status/success
+:status/success</code></pre>
+
+            <pre><code>; Numeric tower
+> (+ 1/3 1/3)
+2/3
+
+> (+ 1/3 1.5)
+1.8333333333333335
+
+> (+ 999999999999999999999 1)
+1000000000000000000000</code></pre>
+
+            <pre><code>; Lambda and closures
+> ((lambda (x y) (+ x y)) 10 20)
+30
+
+> (label make-counter
+    (lambda (n)
+      (lambda () (+ n 1))))
+
+> (label inc (make-counter 5))
+> (inc)
+6</code></pre>
+
+            <pre><code>; Vectors
+> <<1 2 3 4 5>>
+<<1 2 3 4 5>>
+
+> (vector-ref <<10 20 30>> 1)
+20
+
+> (vector-length <<a b c>>)
+3</code></pre>
+        </div>
+    </section>
+
+    <section class="install">
+        <div class="container">
+            <h3>Getting Started</h3>
+            <div class="install-steps">
+                <div class="step">
+                    <h4>📦 Download Pre-built Binary</h4>
+                    <p>Get the latest release for your platform from the <a href="https://github.com/tsmarsh/consair/releases" style="color: var(--accent);">releases page</a>:</p>
+                    <pre><code>chmod +x cons-*
+./cons-*</code></pre>
+                </div>
+
+                <div class="step">
+                    <h4>🔨 Build from Source</h4>
+                    <pre><code>git clone https://github.com/tsmarsh/consair.git
+cd consair
+cargo build --release
+./target/release/cons</code></pre>
+                </div>
+
+                <div class="step">
+                    <h4>🚀 Run the REPL</h4>
+                    <pre><code>cons                    # Interactive REPL
+cons program.lisp       # Run a file
+cons --help            # Show help</code></pre>
+                </div>
+
+                <div class="step">
+                    <h4>📚 Use as a Library</h4>
+                    <pre><code>use consair::{parse, eval, Environment};
+
+let mut env = Environment::new();
+let result = eval(parse("(+ 1 2)").unwrap(), &mut env);
+println!("{}", result.unwrap());  // Prints: 3</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>Built with ❤️ in Rust | Based on McCarthy's 1960 paper "Recursive Functions of Symbolic Expressions"</p>
+            <p style="margin-top: 10px;">
+                <a href="https://github.com/tsmarsh/consair" style="color: var(--accent);">GitHub</a> |
+                <a href="http://www.paulgraham.com/rootsoflisp.html" style="color: var(--accent);">The Roots of Lisp</a> |
+                <a href="http://www-formal.stanford.edu/jmc/recursive.pdf" style="color: var(--accent);">McCarthy's Paper</a>
+            </p>
+        </div>
+    </footer>
+</body>
+</html>
