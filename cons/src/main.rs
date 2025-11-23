@@ -1,4 +1,4 @@
-use consair::{Environment, eval, parse};
+use consair::{Environment, eval, parse, register_stdlib};
 use std::env;
 use std::fs;
 use std::io::{self, Write};
@@ -6,6 +6,7 @@ use std::process;
 
 fn repl() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
 
     println!("Minimal Lisp REPL");
     println!("Type expressions to evaluate, or (exit) to quit");
@@ -45,6 +46,7 @@ fn run_file(filename: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to read file '{filename}': {e}"))?;
 
     let mut env = Environment::new();
+    register_stdlib(&mut env);
     let mut last_result = None;
 
     // Split the file into expressions and evaluate each one
