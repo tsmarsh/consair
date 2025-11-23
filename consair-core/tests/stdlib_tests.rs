@@ -3,7 +3,6 @@ use consair::language::{AtomType, StringType, SymbolType, Value};
 use consair::numeric::NumericType;
 use consair::{eval, parse, register_stdlib};
 use std::fs;
-use std::path::Path;
 
 // ============================================================================
 // Helper Functions
@@ -61,28 +60,29 @@ fn alist_get(alist: &Value, key_name: &str) -> Option<Value> {
 #[test]
 fn test_slurp_spit() {
     let mut env = create_test_env();
-    let test_file = "/tmp/consair_test_slurp_spit.txt";
+    let test_file = std::env::temp_dir().join("consair_test_slurp_spit.txt");
+    let test_file_str = test_file.to_str().unwrap();
     let test_content = "Hello, Consair!";
 
     // Clean up any existing file
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 
     // Write content
-    let write_code = format!(r#"(spit "{test_file}" "{test_content}")"#);
+    let write_code = format!(r#"(spit "{test_file_str}" "{test_content}")"#);
     let write_result = eval(parse(&write_code).unwrap(), &mut env).unwrap();
     assert_eq!(write_result, Value::Nil);
 
     // Verify file exists
-    assert!(Path::new(test_file).exists());
+    assert!(test_file.exists());
 
     // Read content back
-    let read_code = format!(r#"(slurp "{test_file}")"#);
+    let read_code = format!(r#"(slurp "{test_file_str}")"#);
     let read_result = eval(parse(&read_code).unwrap(), &mut env).unwrap();
     let content = extract_string(&read_result);
     assert_eq!(content, test_content);
 
     // Clean up
-    fs::remove_file(test_file).unwrap();
+    fs::remove_file(&test_file).unwrap();
 }
 
 #[test]
@@ -100,24 +100,25 @@ fn test_slurp_nonexistent_file() {
 #[test]
 fn test_spit_multiline() {
     let mut env = create_test_env();
-    let test_file = "/tmp/consair_test_multiline.txt";
+    let test_file = std::env::temp_dir().join("consair_test_multiline.txt");
+    let test_file_str = test_file.to_str().unwrap();
     let test_content = "Line 1\nLine 2\nLine 3";
 
     // Clean up
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 
     // Write multiline content
-    let write_code = format!(r#"(spit "{test_file}" "{test_content}")"#);
+    let write_code = format!(r#"(spit "{test_file_str}" "{test_content}")"#);
     eval(parse(&write_code).unwrap(), &mut env).unwrap();
 
     // Read it back
-    let read_code = format!(r#"(slurp "{test_file}")"#);
+    let read_code = format!(r#"(slurp "{test_file_str}")"#);
     let result = eval(parse(&read_code).unwrap(), &mut env).unwrap();
     let content = extract_string(&result);
     assert_eq!(content, test_content);
 
     // Clean up
-    fs::remove_file(test_file).unwrap();
+    fs::remove_file(&test_file).unwrap();
 }
 
 // ============================================================================
@@ -272,29 +273,30 @@ fn test_println_with_numbers() {
 #[test]
 fn test_slurp_result_can_be_printed() {
     let mut env = create_test_env();
-    let test_file = "/tmp/consair_print_test.txt";
+    let test_file = std::env::temp_dir().join("consair_print_test.txt");
+    let test_file_str = test_file.to_str().unwrap();
     let test_content = "Content to print";
 
     // Clean up
-    let _ = fs::remove_file(test_file);
+    let _ = fs::remove_file(&test_file);
 
     // Write file
     eval(
-        parse(&format!(r#"(spit "{test_file}" "{test_content}")"#)).unwrap(),
+        parse(&format!(r#"(spit "{test_file_str}" "{test_content}")"#)).unwrap(),
         &mut env,
     )
     .unwrap();
 
     // Read and print (should not error)
     let result = eval(
-        parse(&format!(r#"(println (slurp "{test_file}"))"#)).unwrap(),
+        parse(&format!(r#"(println (slurp "{test_file_str}"))"#)).unwrap(),
         &mut env,
     );
 
     assert!(result.is_ok());
 
     // Clean up
-    fs::remove_file(test_file).unwrap();
+    fs::remove_file(&test_file).unwrap();
 }
 
 #[test]
