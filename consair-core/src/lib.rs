@@ -1,6 +1,7 @@
 pub mod interner;
 pub mod interpreter;
 pub mod language;
+pub mod lexer;
 pub mod native;
 pub mod numeric;
 pub mod parser;
