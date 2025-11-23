@@ -119,10 +119,10 @@ proptest! {
         let num_b = NumericType::Int(b);
 
         // (a + b) - b = a
-        if let Ok(ab) = num_a.add(&num_b) {
-            if let Ok(result) = ab.sub(&num_b) {
-                prop_assert_eq!(result, num_a);
-            }
+        if let Ok(ab) = num_a.add(&num_b)
+            && let Ok(result) = ab.sub(&num_b)
+        {
+            prop_assert_eq!(result, num_a);
         }
     }
 
@@ -257,17 +257,17 @@ proptest! {
 
         // (a / b) * b should equal a (for exact division)
         // or at least be very close for ratios
-        if let Ok(ab) = num_a.div(&num_b) {
-            if let Ok(result) = ab.mul(&num_b) {
-                // For integers and ratios, this should be exact
-                // We can't use exact equality due to potential type promotion
-                // but we can check the numeric value is the same
-                let orig_float = num_a.to_float();
-                let result_float = result.to_float();
+        if let Ok(ab) = num_a.div(&num_b)
+            && let Ok(result) = ab.mul(&num_b)
+        {
+            // For integers and ratios, this should be exact
+            // We can't use exact equality due to potential type promotion
+            // but we can check the numeric value is the same
+            let orig_float = num_a.to_float();
+            let result_float = result.to_float();
 
-                // Allow small floating point error
-                prop_assert!((orig_float - result_float).abs() < 1e-10);
-            }
+            // Allow small floating point error
+            prop_assert!((orig_float - result_float).abs() < 1e-10);
         }
     }
 
@@ -335,17 +335,17 @@ proptest! {
         if let (Ok(a), Ok(b)) = (
             NumericType::make_ratio(a_num, a_den),
             NumericType::make_ratio(b_num, b_den),
-        ) {
-            if let Ok(result) = a.add(&b) {
-                // Check using floating point (allowing for rounding)
-                let expected = (a_num as f64 / a_den as f64) + (b_num as f64 / b_den as f64);
-                let actual = result.to_float();
+        )
+            && let Ok(result) = a.add(&b)
+        {
+            // Check using floating point (allowing for rounding)
+            let expected = (a_num as f64 / a_den as f64) + (b_num as f64 / b_den as f64);
+            let actual = result.to_float();
 
-                // Allow for floating point imprecision
-                let diff = (expected - actual).abs();
-                let tolerance = 1e-9 * expected.abs().max(1.0);
-                prop_assert!(diff < tolerance, "Expected {}, got {}", expected, actual);
-            }
+            // Allow for floating point imprecision
+            let diff = (expected - actual).abs();
+            let tolerance = 1e-9 * expected.abs().max(1.0);
+            prop_assert!(diff < tolerance, "Expected {}, got {}", expected, actual);
         }
     }
 

@@ -42,12 +42,11 @@ fn alist_get(alist: &Value, key_name: &str) -> Option<Value> {
     let mut current = alist.clone();
 
     while let Value::Cons(ref outer_cell) = current {
-        if let Value::Cons(ref pair) = outer_cell.car {
-            if let Value::Atom(AtomType::Symbol(SymbolType::Keyword { name, .. })) = &pair.car {
-                if name.with_str(|s| s == key_name) {
-                    return Some(pair.cdr.clone());
-                }
-            }
+        if let Value::Cons(ref pair) = outer_cell.car
+            && let Value::Atom(AtomType::Symbol(SymbolType::Keyword { name, .. })) = &pair.car
+            && name.with_str(|s| s == key_name)
+        {
+            return Some(pair.cdr.clone());
         }
         current = outer_cell.cdr.clone();
     }

@@ -39,7 +39,7 @@ fn bench_parse_deep_nesting(c: &mut Criterion) {
     // Generate deeply nested expression: (+ (+ (+ ... (+ 1 2) ...)))
     let mut expr = String::from("1");
     for _ in 0..100 {
-        expr = format!("(+ {} 1)", expr);
+        expr = format!("(+ {expr} 1)");
     }
 
     c.bench_function("parse deep nesting (100 levels)", |b| {
@@ -168,7 +168,7 @@ fn bench_env_define(c: &mut Criterion) {
         b.iter(|| {
             let mut env = Environment::new();
             env.define(
-                format!("var{}", counter),
+                format!("var{counter}"),
                 Value::Atom(AtomType::Number(NumericType::Int(counter))),
             );
             counter += 1;
@@ -347,7 +347,7 @@ fn bench_symbol_intern(c: &mut Criterion) {
     c.bench_function("symbol intern", |b| {
         let mut counter = 0;
         b.iter(|| {
-            let sym = format!("symbol{}", counter);
+            let sym = format!("symbol{counter}");
             counter += 1;
             black_box(InternedSymbol::new(&sym))
         })
