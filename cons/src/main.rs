@@ -81,7 +81,7 @@ fn run_file(filename: &str) -> Result<(), String> {
 
 // Helper function to parse the next expression from a string
 fn parse_next_expr(input: &str) -> Result<(consair::Value, &str), String> {
-    // Skip leading whitespace and comments
+    // Skip leading whitespace and comments to find the next expression start
     let trimmed = skip_whitespace_and_comments(input);
     if trimmed.is_empty() {
         return Err("No expression found".to_string());
@@ -303,7 +303,9 @@ fn parse_next_expr(input: &str) -> Result<(consair::Value, &str), String> {
     parse(expr_str).map(|expr| (expr, rest))
 }
 
-// Helper function to skip whitespace and comments
+// Helper function to skip whitespace and comments between expressions
+// Note: Comments WITHIN expressions are now handled natively by the lexer
+// This function is only needed to skip comments BETWEEN top-level expressions
 fn skip_whitespace_and_comments(input: &str) -> &str {
     let mut remaining = input;
     loop {

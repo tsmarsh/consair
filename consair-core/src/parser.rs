@@ -52,7 +52,28 @@ impl Lexer {
     }
 
     fn skip_whitespace(&mut self) {
-        while !self.is_eof() && self.current_char().is_whitespace() {
+        loop {
+            // Skip whitespace
+            while !self.is_eof() && self.current_char().is_whitespace() {
+                self.advance();
+            }
+
+            // Skip comments (semicolon to end of line)
+            if self.current_char() == ';' {
+                self.skip_comment();
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn skip_comment(&mut self) {
+        // Skip from semicolon to end of line (or EOF)
+        while !self.is_eof() && self.current_char() != '\n' {
+            self.advance();
+        }
+        // Advance past the newline if present
+        if self.current_char() == '\n' {
             self.advance();
         }
     }

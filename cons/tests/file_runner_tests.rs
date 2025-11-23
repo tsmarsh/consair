@@ -317,7 +317,6 @@ fn test_complex_nested_structure() {
 }
 
 #[test]
-#[ignore] // This test hangs - parser doesn't support comments inside expressions
 fn test_comment_between_list_elements() {
     let result = run_lisp_file(
         r#"
@@ -328,7 +327,6 @@ fn test_comment_between_list_elements() {
   2)
 "#,
     );
-    // Comments inside expressions are passed to the parser
-    // The parser doesn't support comments, so this will fail
-    assert!(result.is_err());
+    // Comments are now natively supported in the lexer
+    assert_eq!(result.unwrap(), "(1 . 2)");
 }
