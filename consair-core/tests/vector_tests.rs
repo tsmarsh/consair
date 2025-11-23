@@ -1,5 +1,5 @@
 use consair::{AtomType, Environment, NumericType, Value, VectorValue, eval, language, parse};
-use std::rc::Rc;
+use std::sync::Arc;
 
 // ============================================================================
 // Vector Parsing Tests
@@ -127,13 +127,13 @@ fn test_vector_parse_error_unexpected_end() {
 
 #[test]
 fn test_vector_display_empty() {
-    let vec = Value::Vector(Rc::new(VectorValue { elements: vec![] }));
+    let vec = Value::Vector(Arc::new(VectorValue { elements: vec![] }));
     assert_eq!(format!("{vec}"), "<<>>");
 }
 
 #[test]
 fn test_vector_display_integers() {
-    let vec = Value::Vector(Rc::new(VectorValue {
+    let vec = Value::Vector(Arc::new(VectorValue {
         elements: vec![
             Value::Atom(AtomType::Number(NumericType::Int(1))),
             Value::Atom(AtomType::Number(NumericType::Int(2))),
@@ -145,7 +145,7 @@ fn test_vector_display_integers() {
 
 #[test]
 fn test_vector_display_mixed() {
-    let vec = Value::Vector(Rc::new(VectorValue {
+    let vec = Value::Vector(Arc::new(VectorValue {
         elements: vec![
             Value::Atom(AtomType::Number(NumericType::Int(1))),
             Value::Atom(AtomType::Number(NumericType::Float(2.5))),
@@ -305,19 +305,19 @@ fn test_nested_vectors() {
 
 #[test]
 fn test_vector_of_vectors_display() {
-    let inner1 = Value::Vector(Rc::new(VectorValue {
+    let inner1 = Value::Vector(Arc::new(VectorValue {
         elements: vec![
             Value::Atom(AtomType::Number(NumericType::Int(1))),
             Value::Atom(AtomType::Number(NumericType::Int(2))),
         ],
     }));
-    let inner2 = Value::Vector(Rc::new(VectorValue {
+    let inner2 = Value::Vector(Arc::new(VectorValue {
         elements: vec![
             Value::Atom(AtomType::Number(NumericType::Int(3))),
             Value::Atom(AtomType::Number(NumericType::Int(4))),
         ],
     }));
-    let outer = Value::Vector(Rc::new(VectorValue {
+    let outer = Value::Vector(Arc::new(VectorValue {
         elements: vec![inner1, inner2],
     }));
     assert_eq!(format!("{outer}"), "<<<<1 2>> <<3 4>>>>");

@@ -44,22 +44,23 @@ This implementation demonstrates how Rust's ownership system and `Rc` (reference
 ## Memory Model
 
 ```rust
-use std::rc::Rc;
+use std::sync::Arc;
 
 enum Value {
     Atom(AtomType),           // immediate values (numbers, symbols, etc.)
-    Cons(Rc<ConsCell>),       // shared ownership of cons cells
+    Cons(Arc<ConsCell>),      // thread-safe shared ownership of cons cells
     Nil,                      // empty list
-    Lambda(Rc<LambdaCell>),   // functions with captured environments
+    Lambda(Arc<LambdaCell>),  // functions with captured environments
 }
 ```
 
 ### Key Design Decisions
 
-- ✅ **Rc-based sharing**: Cons cells and lambdas use `Rc` for safe structure sharing
+- ✅ **Arc-based sharing**: Cons cells and lambdas use `Arc` for thread-safe structure sharing
+- ✅ **Thread-safe**: Value implements Send + Sync, can be safely shared across threads
 - ✅ **Immutability**: All values are immutable after creation
-- ✅ **Automatic memory management**: Reference counting handles deallocation
-- ✅ **No unsafe code**: Passes the borrow checker without any unsafe blocks
+- ✅ **Automatic memory management**: Atomic reference counting handles deallocation
+- ✅ **Minimal unsafe code**: Only two unsafe impl blocks for Send + Sync (verified safe)
 - ❌ **Circular references leak**: This is acceptable for a minimal Lisp
 
 ## Installation
@@ -268,7 +269,7 @@ nil
 
 ### Structure Sharing
 
-Multiple lists can share the same tail structure thanks to `Rc`:
+Multiple lists can share the same tail structure thanks to `Arc`:
 
 ```lisp
 > (label tail '(3 4))
@@ -285,16 +286,15 @@ Both results share the same underlying cons cells for `(3 4)`.
 
 ### Memory Management
 
-- **cons** allocates: Creates new `Rc<ConsCell>`
-- **lambda** allocates: Creates new `Rc<LambdaCell>` with captured environment
+- **cons** allocates: Creates new `Arc<ConsCell>` (thread-safe)
+- **lambda** allocates: Creates new `Arc<LambdaCell>` with captured environment
 - **Other primitives**: No allocation, only read/compare existing values
-- **Deallocation**: Automatic when last `Rc` is dropped
+- **Deallocation**: Automatic when last `Arc` is dropped (atomic reference counting)
 
 ### Limitations
 
 1. **Circular references leak**: Don't create circular data structures
 2. **No tail call optimization**: Deep recursion will overflow the stack
-3. **Single-threaded**: `Rc` is not thread-safe (use `Arc` for concurrent access)
 
 ## Architecture
 
@@ -380,7 +380,8 @@ This implementation achieves all design goals:
 ✅ All seven primitives work correctly
 ✅ Lambda and recursion via label are supported
 ✅ Structure sharing works (multiple references to same tail)
-✅ Passes the borrow checker without unsafe code
+✅ Thread-safe (Value implements Send + Sync)
+✅ Minimal unsafe code (only verified Send + Sync impls)
 ✅ Automatic memory management (no manual free)
 ✅ Can implement complex functions in terms of primitives
 
@@ -388,7 +389,7 @@ This implementation achieves all design goals:
 
 - [Paul Graham - The Roots of Lisp](http://www.paulgraham.com/rootsoflisp.html)
 - [John McCarthy - Recursive Functions of Symbolic Expressions (1960)](http://www-formal.stanford.edu/jmc/recursive.pdf)
-- [Rust Rc documentation](https://doc.rust-lang.org/std/rc/struct.Rc.html)
+- [Rust Arc documentation](https://doc.rust-lang.org/std/sync/struct.Arc.html)
 
 ## License
 

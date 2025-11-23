@@ -1,7 +1,7 @@
 use crate::language::{AtomType, StringPart, StringType, SymbolType, Value, VectorValue, cons};
 use crate::numeric::NumericType;
 use regex::Regex;
-use std::rc::Rc;
+use std::sync::Arc;
 
 // ============================================================================
 // Lexer
@@ -544,7 +544,7 @@ impl Lexer {
         // Compile regex
         let regex = Regex::new(&regex_pattern).map_err(|e| format!("Invalid regex: {e}"))?;
 
-        Ok(Token::String(StringType::Regex(Rc::new(regex))))
+        Ok(Token::String(StringType::Regex(Arc::new(regex))))
     }
 
     // ========================================================================
@@ -861,7 +861,7 @@ impl<'a> Parser<'a> {
                 }
 
                 self.advance()?; // consume >>
-                Ok(Value::Vector(Rc::new(VectorValue { elements })))
+                Ok(Value::Vector(Arc::new(VectorValue { elements })))
             }
             Token::LParen => {
                 self.advance()?;

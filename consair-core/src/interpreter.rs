@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::language::{AtomType, LambdaCell, SymbolType, Value, car, cdr, cons, eq, is_atom};
 use crate::numeric::NumericType;
@@ -10,8 +10,8 @@ use crate::numeric::NumericType;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Environment {
-    bindings: Rc<HashMap<String, Value>>,
-    parent: Option<Rc<Environment>>,
+    bindings: Arc<HashMap<String, Value>>,
+    parent: Option<Arc<Environment>>,
 }
 
 impl Default for Environment {
@@ -23,7 +23,7 @@ impl Default for Environment {
 impl Environment {
     pub fn new() -> Self {
         Environment {
-            bindings: Rc::new(HashMap::new()),
+            bindings: Arc::new(HashMap::new()),
             parent: None,
         }
     }
@@ -34,8 +34,8 @@ impl Environment {
             bindings.insert(param.clone(), arg.clone());
         }
         Environment {
-            bindings: Rc::new(bindings),
-            parent: Some(Rc::new(self.clone())),
+            bindings: Arc::new(bindings),
+            parent: Some(Arc::new(self.clone())),
         }
     }
 
@@ -43,7 +43,7 @@ impl Environment {
         // Create a new HashMap with the existing bindings plus the new one
         let mut new_bindings = (*self.bindings).clone();
         new_bindings.insert(name, value);
-        self.bindings = Rc::new(new_bindings);
+        self.bindings = Arc::new(new_bindings);
     }
 
     fn lookup(&self, name: &str) -> Option<Value> {
@@ -173,7 +173,7 @@ pub fn eval(expr: Value, env: &mut Environment) -> Result<Value, String> {
                             current = param_cell.cdr.clone();
                         }
 
-                        return Ok(Value::Lambda(Rc::new(LambdaCell {
+                        return Ok(Value::Lambda(Arc::new(LambdaCell {
                             params,
                             body,
                             env: env.clone(),

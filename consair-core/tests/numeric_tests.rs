@@ -206,10 +206,10 @@ fn test_negation() {
 #[test]
 fn test_bigint_arithmetic() {
     use num_bigint::BigInt;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
-    let big1 = NumericType::BigInt(Rc::new(BigInt::from(1000000000000i64)));
-    let big2 = NumericType::BigInt(Rc::new(BigInt::from(2000000000000i64)));
+    let big1 = NumericType::BigInt(Arc::new(BigInt::from(1000000000000i64)));
+    let big2 = NumericType::BigInt(Arc::new(BigInt::from(2000000000000i64)));
 
     match big1.add(&big2).unwrap() {
         NumericType::BigInt(result) => {

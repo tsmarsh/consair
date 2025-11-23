@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::fmt;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use num_bigint::BigInt as BigInteger;
 use num_rational::Ratio as NumRatio;
@@ -16,13 +16,13 @@ pub enum NumericType {
     Int(i64),
 
     /// Arbitrary precision integer
-    BigInt(Rc<BigInteger>),
+    BigInt(Arc<BigInteger>),
 
     /// Exact rational number (numerator, denominator in reduced form)
     Ratio(i64, i64),
 
     /// Arbitrary precision rational
-    BigRatio(Rc<NumRatio<BigInteger>>),
+    BigRatio(Arc<NumRatio<BigInteger>>),
 
     /// IEEE 754 double precision floating point
     Float(f64),
@@ -207,16 +207,16 @@ impl NumericType {
                     // Promote to BigInt on overflow
                     let big_a = BigInteger::from(*a);
                     let big_b = BigInteger::from(*b);
-                    Ok(BigInt(Rc::new(big_a + big_b)))
+                    Ok(BigInt(Arc::new(big_a + big_b)))
                 }
             },
 
             // Int + BigInt
-            (Int(a), BigInt(b)) => Ok(BigInt(Rc::new(BigInteger::from(*a) + b.as_ref()))),
-            (BigInt(a), Int(b)) => Ok(BigInt(Rc::new(a.as_ref() + BigInteger::from(*b)))),
+            (Int(a), BigInt(b)) => Ok(BigInt(Arc::new(BigInteger::from(*a) + b.as_ref()))),
+            (BigInt(a), Int(b)) => Ok(BigInt(Arc::new(a.as_ref() + BigInteger::from(*b)))),
 
             // BigInt + BigInt
-            (BigInt(a), BigInt(b)) => Ok(BigInt(Rc::new(a.as_ref() + b.as_ref()))),
+            (BigInt(a), BigInt(b)) => Ok(BigInt(Arc::new(a.as_ref() + b.as_ref()))),
 
             // Ratio + Ratio: a/b + c/d = (ad + bc) / bd
             (Ratio(an, ad), Ratio(bn, bd)) => {
@@ -229,7 +229,7 @@ impl NumericType {
                         // Overflow: promote to BigRatio
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big + b_big)));
+                        return Ok(BigRatio(Arc::new(a_big + b_big)));
                     }
                 };
 
@@ -239,7 +239,7 @@ impl NumericType {
                         // Overflow: promote to BigRatio
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big + b_big)));
+                        return Ok(BigRatio(Arc::new(a_big + b_big)));
                     }
                 };
 
@@ -253,7 +253,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*a), BigInteger::one());
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big + b_big)));
+                        return Ok(BigRatio(Arc::new(a_big + b_big)));
                     }
                 };
                 Self::make_ratio(num, *bd)
@@ -264,7 +264,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*b), BigInteger::one());
-                        return Ok(BigRatio(Rc::new(a_big + b_big)));
+                        return Ok(BigRatio(Arc::new(a_big + b_big)));
                     }
                 };
                 Self::make_ratio(num, *ad)
@@ -278,7 +278,7 @@ impl NumericType {
             (Float(a), Ratio(bn, bd)) => Ok(Float(a + (*bn as f64) / (*bd as f64))),
 
             // BigRatio operations
-            (BigRatio(a), BigRatio(b)) => Ok(BigRatio(Rc::new(a.as_ref() + b.as_ref()))),
+            (BigRatio(a), BigRatio(b)) => Ok(BigRatio(Arc::new(a.as_ref() + b.as_ref()))),
 
             _ => Err(format!("Unsupported addition: {self} + {other}")),
         }
@@ -295,16 +295,16 @@ impl NumericType {
                 None => {
                     let big_a = BigInteger::from(*a);
                     let big_b = BigInteger::from(*b);
-                    Ok(BigInt(Rc::new(big_a - big_b)))
+                    Ok(BigInt(Arc::new(big_a - big_b)))
                 }
             },
 
             // Int - BigInt
-            (Int(a), BigInt(b)) => Ok(BigInt(Rc::new(BigInteger::from(*a) - b.as_ref()))),
-            (BigInt(a), Int(b)) => Ok(BigInt(Rc::new(a.as_ref() - BigInteger::from(*b)))),
+            (Int(a), BigInt(b)) => Ok(BigInt(Arc::new(BigInteger::from(*a) - b.as_ref()))),
+            (BigInt(a), Int(b)) => Ok(BigInt(Arc::new(a.as_ref() - BigInteger::from(*b)))),
 
             // BigInt - BigInt
-            (BigInt(a), BigInt(b)) => Ok(BigInt(Rc::new(a.as_ref() - b.as_ref()))),
+            (BigInt(a), BigInt(b)) => Ok(BigInt(Arc::new(a.as_ref() - b.as_ref()))),
 
             // Ratio - Ratio: a/b - c/d = (ad - bc) / bd
             (Ratio(an, ad), Ratio(bn, bd)) => {
@@ -316,7 +316,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big - b_big)));
+                        return Ok(BigRatio(Arc::new(a_big - b_big)));
                     }
                 };
 
@@ -325,7 +325,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big - b_big)));
+                        return Ok(BigRatio(Arc::new(a_big - b_big)));
                     }
                 };
 
@@ -339,7 +339,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*a), BigInteger::one());
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big - b_big)));
+                        return Ok(BigRatio(Arc::new(a_big - b_big)));
                     }
                 };
                 Self::make_ratio(num, *bd)
@@ -350,7 +350,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*b), BigInteger::one());
-                        return Ok(BigRatio(Rc::new(a_big - b_big)));
+                        return Ok(BigRatio(Arc::new(a_big - b_big)));
                     }
                 };
                 Self::make_ratio(num, *ad)
@@ -364,7 +364,7 @@ impl NumericType {
             (Float(a), Ratio(bn, bd)) => Ok(Float(a - (*bn as f64) / (*bd as f64))),
 
             // BigRatio operations
-            (BigRatio(a), BigRatio(b)) => Ok(BigRatio(Rc::new(a.as_ref() - b.as_ref()))),
+            (BigRatio(a), BigRatio(b)) => Ok(BigRatio(Arc::new(a.as_ref() - b.as_ref()))),
 
             _ => Err(format!("Unsupported subtraction: {self} - {other}")),
         }
@@ -381,16 +381,16 @@ impl NumericType {
                 None => {
                     let big_a = BigInteger::from(*a);
                     let big_b = BigInteger::from(*b);
-                    Ok(BigInt(Rc::new(big_a * big_b)))
+                    Ok(BigInt(Arc::new(big_a * big_b)))
                 }
             },
 
             // Int * BigInt
-            (Int(a), BigInt(b)) => Ok(BigInt(Rc::new(BigInteger::from(*a) * b.as_ref()))),
-            (BigInt(a), Int(b)) => Ok(BigInt(Rc::new(a.as_ref() * BigInteger::from(*b)))),
+            (Int(a), BigInt(b)) => Ok(BigInt(Arc::new(BigInteger::from(*a) * b.as_ref()))),
+            (BigInt(a), Int(b)) => Ok(BigInt(Arc::new(a.as_ref() * BigInteger::from(*b)))),
 
             // BigInt * BigInt
-            (BigInt(a), BigInt(b)) => Ok(BigInt(Rc::new(a.as_ref() * b.as_ref()))),
+            (BigInt(a), BigInt(b)) => Ok(BigInt(Arc::new(a.as_ref() * b.as_ref()))),
 
             // Ratio * Ratio: a/b * c/d = ac / bd
             (Ratio(an, ad), Ratio(bn, bd)) => {
@@ -399,7 +399,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big * b_big)));
+                        return Ok(BigRatio(Arc::new(a_big * b_big)));
                     }
                 };
 
@@ -408,7 +408,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big * b_big)));
+                        return Ok(BigRatio(Arc::new(a_big * b_big)));
                     }
                 };
 
@@ -422,7 +422,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*a), BigInteger::one());
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big * b_big)));
+                        return Ok(BigRatio(Arc::new(a_big * b_big)));
                     }
                 };
                 Self::make_ratio(num, *bd)
@@ -433,7 +433,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*b), BigInteger::one());
-                        return Ok(BigRatio(Rc::new(a_big * b_big)));
+                        return Ok(BigRatio(Arc::new(a_big * b_big)));
                     }
                 };
                 Self::make_ratio(num, *ad)
@@ -447,7 +447,7 @@ impl NumericType {
             (Float(a), Ratio(bn, bd)) => Ok(Float(a * (*bn as f64) / (*bd as f64))),
 
             // BigRatio operations
-            (BigRatio(a), BigRatio(b)) => Ok(BigRatio(Rc::new(a.as_ref() * b.as_ref()))),
+            (BigRatio(a), BigRatio(b)) => Ok(BigRatio(Arc::new(a.as_ref() * b.as_ref()))),
 
             _ => Err(format!("Unsupported multiplication: {self} * {other}")),
         }
@@ -478,7 +478,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big / b_big)));
+                        return Ok(BigRatio(Arc::new(a_big / b_big)));
                     }
                 };
 
@@ -487,7 +487,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big / b_big)));
+                        return Ok(BigRatio(Arc::new(a_big / b_big)));
                     }
                 };
 
@@ -501,7 +501,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*a), BigInteger::one());
                         let b_big = NumRatio::new(BigInteger::from(*bn), BigInteger::from(*bd));
-                        return Ok(BigRatio(Rc::new(a_big / b_big)));
+                        return Ok(BigRatio(Arc::new(a_big / b_big)));
                     }
                 };
                 Self::make_ratio(num, *bn)
@@ -514,7 +514,7 @@ impl NumericType {
                     None => {
                         let a_big = NumRatio::new(BigInteger::from(*an), BigInteger::from(*ad));
                         let b_big = NumRatio::new(BigInteger::from(*b), BigInteger::one());
-                        return Ok(BigRatio(Rc::new(a_big / b_big)));
+                        return Ok(BigRatio(Arc::new(a_big / b_big)));
                     }
                 };
                 Self::make_ratio(*an, denom)
@@ -531,24 +531,24 @@ impl NumericType {
             (BigInt(a), BigInt(b)) => {
                 let ratio = NumRatio::new(a.as_ref().clone(), b.as_ref().clone());
                 if ratio.is_integer() {
-                    Ok(BigInt(Rc::new(ratio.numer().clone())))
+                    Ok(BigInt(Arc::new(ratio.numer().clone())))
                 } else {
-                    Ok(BigRatio(Rc::new(ratio)))
+                    Ok(BigRatio(Arc::new(ratio)))
                 }
             }
 
-            (Int(a), BigInt(b)) => Ok(BigRatio(Rc::new(NumRatio::new(
+            (Int(a), BigInt(b)) => Ok(BigRatio(Arc::new(NumRatio::new(
                 BigInteger::from(*a),
                 b.as_ref().clone(),
             )))),
 
-            (BigInt(a), Int(b)) => Ok(BigRatio(Rc::new(NumRatio::new(
+            (BigInt(a), Int(b)) => Ok(BigRatio(Arc::new(NumRatio::new(
                 a.as_ref().clone(),
                 BigInteger::from(*b),
             )))),
 
             // BigRatio operations
-            (BigRatio(a), BigRatio(b)) => Ok(BigRatio(Rc::new(a.as_ref() / b.as_ref()))),
+            (BigRatio(a), BigRatio(b)) => Ok(BigRatio(Arc::new(a.as_ref() / b.as_ref()))),
 
             _ => Err(format!("Unsupported division: {self} / {other}")),
         }
@@ -561,11 +561,11 @@ impl NumericType {
         match self {
             Int(n) => match n.checked_neg() {
                 Some(result) => Ok(Int(result)),
-                None => Ok(BigInt(Rc::new(-BigInteger::from(*n)))),
+                None => Ok(BigInt(Arc::new(-BigInteger::from(*n)))),
             },
-            BigInt(n) => Ok(BigInt(Rc::new(-n.as_ref()))),
+            BigInt(n) => Ok(BigInt(Arc::new(-n.as_ref()))),
             Ratio(num, denom) => Ok(Ratio(-num, *denom)),
-            BigRatio(r) => Ok(BigRatio(Rc::new(-r.as_ref()))),
+            BigRatio(r) => Ok(BigRatio(Arc::new(-r.as_ref()))),
             Float(x) => Ok(Float(-x)),
         }
     }

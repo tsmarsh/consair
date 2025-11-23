@@ -1,6 +1,6 @@
 use regex::Regex;
 use std::fmt;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::interpreter::Environment;
 use crate::numeric::NumericType;
@@ -34,7 +34,7 @@ pub enum StringType {
 
     /// Compiled regex pattern
     /// Syntax: ~r/pattern/flags
-    Regex(Rc<Regex>),
+    Regex(Arc<Regex>),
 
     /// Binary byte string
     /// Syntax: #b"binary" or #b[0xFF 0x00]
@@ -200,10 +200,10 @@ pub type NativeFn = fn(&[Value], &mut Environment) -> Result<Value, String>;
 #[derive(Clone, Debug)]
 pub enum Value {
     Atom(AtomType),
-    Cons(Rc<ConsCell>),
+    Cons(Arc<ConsCell>),
     Nil,
-    Lambda(Rc<LambdaCell>),
-    Vector(Rc<VectorValue>),
+    Lambda(Arc<LambdaCell>),
+    Vector(Arc<VectorValue>),
     NativeFn(NativeFn),
 }
 
@@ -224,6 +224,14 @@ impl PartialEq for Value {
         }
     }
 }
+
+// Make Value thread-safe
+// SAFETY: All interior data is either:
+// - Immutable and wrapped in Arc (thread-safe)
+// - Function pointers (stateless, thread-safe)
+// - Basic types that are Send + Sync
+unsafe impl Send for Value {}
+unsafe impl Sync for Value {}
 
 // ============================================================================
 // Display Implementation
@@ -359,7 +367,7 @@ impl fmt::Display for Value {
 // ============================================================================
 
 pub fn cons(car: Value, cdr: Value) -> Value {
-    Value::Cons(Rc::new(ConsCell { car, cdr }))
+    Value::Cons(Arc::new(ConsCell { car, cdr }))
 }
 
 pub fn car(value: &Value) -> Result<Value, String> {
