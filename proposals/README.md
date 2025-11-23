@@ -21,6 +21,8 @@ This directory contains detailed implementation prompts for improving the Consai
 ### 🟢 Medium Priority
 10. ~~[Improve REPL Experience](10-improve-repl.md)~~ - ✅ **COMPLETED** (rustyline integration with history, multi-line input, and special commands)
 11. [Document Security Implications](11-document-security-implications.md) - Warn about shell injection risks
+16. [Add REPL Syntax Highlighting](16-add-repl-syntax-highlighting.md) - Color-coded syntax for better readability
+17. [Add REPL Tab Completion](17-add-repl-tab-completion.md) - Auto-complete symbols, functions, and commands
 
 ### 🔵 Low Priority (Future Enhancements)
 12. [Add Macro System](12-add-macro-system.md) - defmacro, quasiquote, meta-programming

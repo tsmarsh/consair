@@ -1,282 +1,168 @@
-# Add Recursive Function Support
+# Proposal 015: Recursive Function Support (Implementation Spec)
 
-## Problem
+* **Status:** Ready for Implementation
+* **Date:** 2025-11-23
+* **Target:** Small LLM / Coding Agent
+* **Priority:** Critical
 
-The `label` special form cannot define recursive functions because it evaluates the lambda before binding the name to the environment. This means the function name is not available within its own body, making self-reference impossible.
+## Objective
+Enable recursive functions (e.g., factorial) by refactoring the `Environment` struct to use **Interior Mutability**. This ensures that when a function name is bound via `label`, the `Lambda` (which has already captured the environment) sees the new binding immediately.
 
-**Current behavior:**
-```lisp
-(label factorial (lambda (n)
-  (cond
-    ((= n 0) 1)
-    (t (* n (factorial (- n 1)))))))
-(factorial 5)
-; Error: Unbound symbol: factorial
-```
+## 1. Architecture Refactor: Shared Environment
 
-**Root cause** (in `consair-core/src/interpreter.rs:206-218`):
+**Current Issue:** `Environment` is likely a simple struct. When passed to a Lambda, it is cloned (creating a snapshot). Updates to the original environment (like defining the function name) are not reflected inside the Lambda's snapshot.
+
+**Required Change:** Wrap the inner state in `Arc<RwLock<...>>` so all clones point to the same storage.
+
+### File: `consair-core/src/interpreter.rs` (or `environment.rs`)
+
+Replace the existing `Environment` struct definition with:
+
 ```rust
-"label" => {
-    // Lambda is evaluated BEFORE the name is defined
-    let fn_val = eval_loop(fn_expr, &mut current_env, depth + 1)?;
-    // Name is only added AFTER lambda captures its environment
-    env.define(name.resolve(), fn_val.clone());
-    return Ok(fn_val);
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
+use crate::language::Value;
+
+// Internal state holding the data and parent pointer
+struct EnvironmentState {
+    data: HashMap<String, Value>,
+    parent: Option<Arc<Environment>>, // Point to the wrapper, not the state
 }
-```
 
-Since lambdas capture their environment at creation time (line 203: `env: current_env.clone()`), the function name isn't in the captured environment yet.
+// The public wrapper that is cheap to clone
+#[derive(Clone)]
+pub struct Environment {
+    state: Arc<RwLock<EnvironmentState>>,
+}
 
-## Impact
+impl Environment {
+    /// Create a new, empty global environment
+    pub fn new() -> Self {
+        Environment {
+            state: Arc::new(RwLock::new(EnvironmentState {
+                data: HashMap::new(),
+                parent: None,
+            })),
+        }
+    }
 
-**High Priority** - This is a fundamental limitation that prevents:
+    /// Create a child environment extending the current one
+    pub fn extend(&self, params: &[String], args: &[Value]) -> Self {
+        let mut data = HashMap::new();
+        for (param, arg) in params.iter().zip(args.iter()) {
+            data.insert(param.clone(), arg.clone());
+        }
 
-- ✗ **Any recursive algorithm**: factorial, fibonacci, tree traversal, etc.
-- ✗ **Mutually recursive functions**: is-even/is-odd pairs
-- ✗ **Recursive data structure operations**: list-length, tree-depth, etc.
-- ✗ **Comprehensive benchmarks**: As noted in `benches/benchmarks.rs:109`:
-  ```rust
-  // Note: Recursive benchmarks are skipped due to label/environment scoping complexity
-  ```
+        Environment {
+            state: Arc::new(RwLock::new(EnvironmentState {
+                data,
+                // The child holds a reference to the parent's wrapper
+                parent: Some(Arc::new(self.clone())), 
+            })),
+        }
+    }
 
-This limitation significantly restricts what programs can be written in Consair and prevents realistic performance benchmarking.
+    /// Define a variable in the CURRENT scope (mutating the shared state)
+    pub fn define(&self, name: String, value: Value) {
+        let mut state = self.state.write().unwrap();
+        state.data.insert(name, value);
+    }
 
-## Proposed Solutions
+    /// Look up a variable, walking up the parent chain
+    pub fn lookup(&self, name: &str) -> Option<Value> {
+        let state = self.state.read().unwrap();
+        
+        if let Some(val) = state.data.get(name) {
+            return Some(val.clone());
+        }
 
-### Option 1: Fix `label` to Support Self-Reference (Recommended)
-
-Modify `label` to define the name in the environment before evaluating the lambda, similar to Scheme's `letrec`:
-
-```rust
-"label" => {
-    let name_expr = car(&cell.cdr)?;
-    let fn_expr = car(&cdr(&cell.cdr)?)?;
-
-    if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(name))) = name_expr {
-        // Strategy: Create a placeholder, evaluate lambda, then update
-        // OR: Add name to env before eval (requires lazy/mutable binding)
-
-        // Implementation approach 1: Two-pass
-        // 1. Add uninitialized binding
-        // 2. Eval lambda (can now see binding)
-        // 3. Update binding with actual value
-
-        // Implementation approach 2: Modify lambda environment after creation
-        // This requires lambdas to have mutable environments
-
-        let fn_val = eval_loop(fn_expr, &mut current_env, depth + 1)?;
-
-        // If using approach 1, we need a way to handle the uninitialized case
-        // If using approach 2, we need to mutate the lambda's captured env
-
-        env.define(name.resolve(), fn_val.clone());
-        return Ok(fn_val);
+        // Recursive lookup in parent
+        match &state.parent {
+            Some(parent) => parent.lookup(name),
+            None => None,
+        }
     }
 }
+````
+
+## 2\. Logic Update: `label` Special Form
+
+Update the `eval` function to rely on this shared state.
+
+### File: `consair-core/src/interpreter.rs` (inside `eval` function)
+
+Locate the `match` arm for `"label"`. Replace it with:
+
+```rust
+"label" => {
+    // 1. Parse arguments
+    // Expected syntax: (label name (lambda ...))
+    let name_expr = car(&cell.cdr)?;
+    let value_expr = car(&cdr(&cell.cdr)?)?;
+
+    let name = match name_expr {
+        Value::Atom(AtomType::Symbol(SymbolType::Symbol(s))) => s.resolve(),
+        _ => return Err("label expects a symbol as the first argument".to_string()),
+    };
+
+    // 2. Evaluate the value (usually a Lambda)
+    // We pass 'env.clone()'. Because Env uses Arc<RwLock>, this captures 
+    // a pointer to the SAME environment storage we are holding.
+    let value = eval(value_expr, env.clone())?;
+
+    // 3. Define the name in the environment
+    // Because of the shared pointer, the 'value' (if it is a Lambda) 
+    // will immediately be able to see this new definition.
+    env.define(name, value.clone());
+
+    Ok(value)
+}
 ```
 
-### Option 2: Add Explicit `letrec` or `rec` Special Form
+## 3\. Implementation Verification (Tests)
 
-Create a new special form specifically for recursive bindings:
+Add the following tests to verify recursion works.
 
-```lisp
-; New special form: letrec
-(letrec ((factorial (lambda (n)
-                      (cond ((= n 0) 1)
-                            (t (* n (factorial (- n 1))))))))
-  (factorial 5))
+### File: `consair-core/tests/integration_tests.rs`
+
+```rust
+#[test]
+fn test_recursive_factorial() {
+    let code = r#"
+        (label factorial (lambda (n)
+            (cond 
+                ((= n 0) 1)
+                (t (* n (factorial (- n 1)))))))
+        (factorial 5)
+    "#;
+    let result = run_code(code).unwrap(); // Assuming helper 'run_code' exists
+    assert_eq!(result, Value::Atom(AtomType::Number(120)));
+}
+
+#[test]
+fn test_mutually_recursive_functions() {
+    let code = r#"
+        (label is-even (lambda (n)
+            (cond ((= n 0) t) (t (is-odd (- n 1))))))
+        
+        (label is-odd (lambda (n)
+            (cond ((= n 0) nil) (t (is-even (- n 1))))))
+            
+        (cons (is-even 4) (is-odd 4))
+    "#;
+    // Expect: (t . nil) or list (t nil) depending on implementation
+    let result_str = format!("{}", run_code(code).unwrap());
+    assert!(result_str.contains("t")); 
+    assert!(result_str.contains("nil"));
+}
 ```
 
-This makes the recursive intent explicit and allows `label` to remain simple.
+## 4\. Checklist for LLM Agent
 
-### Option 3: Y-Combinator (No Changes Required)
+1.  [ ] **Modify Struct**: Change `Environment` to use `Arc<RwLock<EnvironmentState>>`.
+2.  [ ] **Fix Imports**: Ensure `std::sync::{Arc, RwLock}` is imported.
+3.  [ ] **Update Methods**: Update `new`, `extend`, `define`, and `lookup` to handle locking (`.read().unwrap()` / `.write().unwrap()`).
+4.  [ ] **Update `label`**: Ensure it evaluates *before* defining, relying on the pointer capture.
+5.  [ ] **Verify**: Run `cargo test` to ensure no deadlocks or borrowing errors.
 
-Users can already use the Y-combinator for recursion (no interpreter changes needed):
-
-```lisp
-(label Y (lambda (f)
-  ((lambda (x) (f (lambda (y) ((x x) y))))
-   (lambda (x) (f (lambda (y) ((x x) y)))))))
-
-(label factorial-gen (lambda (rec)
-  (lambda (n)
-    (cond ((= n 0) 1)
-          (t (* n (rec (- n 1))))))))
-
-(label factorial (Y factorial-gen))
-(factorial 5)  ; => 120
-```
-
-**Pros**: Works today, no code changes
-**Cons**: Complex, non-intuitive, poor error messages, performance overhead
-
-## Recommended Implementation: Option 1
-
-Modify `label` to support self-reference using a two-phase binding approach:
-
-1. **Add a `Deferred` or `Uninitialized` value type** to represent "being defined"
-2. **Bind the name before evaluating** the lambda expression
-3. **Update the binding** once the lambda is created
-4. **Handle deferred lookups** by either:
-   - Erroring if accessed during its own definition (simple)
-   - Allowing it (enables more complex patterns)
-
-### Implementation Steps
-
-1. **Add uninitialized value type** to `language.rs`:
-   ```rust
-   pub enum Value {
-       Atom(AtomType),
-       Cons(Arc<ConsCell>),
-       Lambda(Arc<LambdaCell>),
-       Vector(Arc<VectorCell>),
-       NativeFn(NativeFn),
-       Uninitialized(String), // Name of value being defined
-       Nil,
-   }
-   ```
-
-2. **Modify `label` in interpreter.rs**:
-   ```rust
-   "label" => {
-       let name_expr = car(&cell.cdr)?;
-       let fn_expr = car(&cdr(&cell.cdr)?)?;
-
-       if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(name))) = name_expr {
-           let name_str = name.resolve();
-
-           // Phase 1: Add placeholder binding
-           current_env.define(name_str.clone(), Value::Uninitialized(name_str.clone()));
-
-           // Phase 2: Evaluate lambda (can now see the name in scope)
-           let fn_val = eval_loop(fn_expr, &mut current_env, depth + 1)?;
-
-           // Phase 3: Replace placeholder with actual value
-           current_env.define(name_str.clone(), fn_val.clone());
-
-           return Ok(fn_val);
-       }
-   }
-   ```
-
-3. **Handle `Uninitialized` in lookups**:
-   ```rust
-   Value::Atom(AtomType::Symbol(ref sym)) => {
-       return match sym {
-           SymbolType::Symbol(name) => name.with_str(|s| {
-               match current_env.lookup(s) {
-                   Some(Value::Uninitialized(n)) => {
-                       Err(format!("Cannot use '{}' within its own definition", n))
-                   }
-                   Some(val) => Ok(val),
-                   None => Err(format!("Unbound symbol: {}", name)),
-               }
-           }),
-           SymbolType::Keyword { .. } => Ok(expr),
-       };
-   }
-   ```
-
-4. **Add tests** for recursive functions:
-   ```rust
-   #[test]
-   fn test_recursive_factorial() {
-       let result = run_lisp_file(r#"
-   (label factorial (lambda (n)
-     (cond ((= n 0) 1)
-           (t (* n (factorial (- n 1)))))))
-   (factorial 5)
-   "#);
-       assert_eq!(result.unwrap(), "120");
-   }
-
-   #[test]
-   fn test_mutually_recursive() {
-       let result = run_lisp_file(r#"
-   (label is-even (lambda (n)
-     (cond ((= n 0) t)
-           (t (is-odd (- n 1))))))
-   (label is-odd (lambda (n)
-     (cond ((= n 0) nil)
-           (t (is-even (- n 1))))))
-   (is-even 4)
-   "#);
-       assert_eq!(result.unwrap(), "t");
-   }
-
-   #[test]
-   fn test_list_length() {
-       let result = run_lisp_file(r#"
-   (label length (lambda (lst)
-     (cond ((atom lst) 0)
-           (t (+ 1 (length (cdr lst)))))))
-   (length '(1 2 3 4 5))
-   "#);
-       assert_eq!(result.unwrap(), "5");
-   }
-   ```
-
-5. **Add recursive benchmarks** (from proposal 09):
-   ```rust
-   fn bench_eval_factorial(c: &mut Criterion) {
-       let mut env = Environment::new();
-       register_stdlib(&mut env);
-
-       // Define factorial
-       let setup = parse(r#"
-   (label factorial (lambda (n)
-     (cond ((= n 0) 1)
-           (t (* n (factorial (- n 1)))))))
-   "#).unwrap();
-       eval(setup, &mut env).unwrap();
-
-       c.bench_function("eval recursive factorial(10)", |b| {
-           b.iter(|| {
-               let expr = parse("(factorial 10)").unwrap();
-               black_box(eval(expr, &mut env.clone()).unwrap())
-           })
-       });
-   }
-   ```
-
-6. **Update documentation**:
-   - Add recursion examples to README.md
-   - Document the self-reference limitation and solution
-   - Add to language guide with examples
-
-## Alternative: Environment Mutation Approach
-
-Instead of `Uninitialized`, allow modifying lambda environments after creation:
-
-1. Make `LambdaCell.env` mutable via `RefCell` or similar
-2. After creating lambda, update its environment to include itself
-3. More complex but avoids the `Uninitialized` type
-
-## Success Criteria
-
-- [x] `label` can define recursive functions
-- [x] Factorial, fibonacci, and list-length work correctly
-- [x] Mutually recursive functions work (is-even/is-odd)
-- [x] No performance regression for non-recursive code
-- [x] Tests for edge cases (deep recursion, mutual recursion)
-- [x] Recursive benchmarks added and working
-- [x] Documentation updated with recursion examples
-- [x] Error messages clear when recursion depth exceeded
-
-## Testing Plan
-
-1. **Unit tests**: Basic recursive functions
-2. **Property tests**: Recursive vs iterative equivalence
-3. **Performance tests**: Deep recursion (100+ levels)
-4. **Edge cases**:
-   - Empty list recursion
-   - Mutual recursion cycles
-   - Self-reference in non-function contexts
-5. **Regression tests**: Ensure non-recursive code still works
-
-## Notes
-
-- This is blocking comprehensive benchmarking (proposal 09)
-- Required for realistic Lisp programs
-- Once fixed, many classic Lisp examples become possible
-- Consider if this affects garbage collection (recursive structures)
+<!-- end list -->
