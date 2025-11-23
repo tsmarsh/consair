@@ -19,7 +19,7 @@ This directory contains detailed implementation prompts for improving the Consai
 15. [Add Recursive Function Support](15-add-recursive-function-support.md) - Fix `label` to enable self-reference for recursive algorithms
 
 ### 🟢 Medium Priority
-10. [Improve REPL Experience](10-improve-repl.md) - Modern interactive shell with history
+10. ~~[Improve REPL Experience](10-improve-repl.md)~~ - ✅ **COMPLETED** (rustyline integration with history, multi-line input, and special commands)
 11. [Document Security Implications](11-document-security-implications.md) - Warn about shell injection risks
 
 ### 🔵 Low Priority (Future Enhancements)

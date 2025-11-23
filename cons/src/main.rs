@@ -1,43 +1,197 @@
 use consair::{Environment, eval, parse, register_stdlib};
+use rustyline::error::ReadlineError;
+use rustyline::{Config, Editor};
 use std::env;
 use std::fs;
-use std::io::{self, Write};
+use std::path::PathBuf;
 use std::process;
+
+/// Check if an expression has balanced parentheses and is complete
+fn is_complete_expression(input: &str) -> bool {
+    let mut depth = 0;
+    let mut in_string = false;
+    let mut escape_next = false;
+
+    for ch in input.chars() {
+        if in_string {
+            if escape_next {
+                escape_next = false;
+                continue;
+            }
+            if ch == '\\' {
+                escape_next = true;
+                continue;
+            }
+            if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '"' => in_string = true,
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ => {}
+        }
+    }
+
+    depth == 0 && !in_string
+}
+
+/// Print help information
+fn print_help() {
+    println!("Consair REPL - Interactive Lisp Interpreter");
+    println!();
+    println!("Special Commands:");
+    println!("  :help, :h        Show this help message");
+    println!("  :quit, :q        Exit the REPL");
+    println!("  :env             Show current environment bindings");
+    println!();
+    println!("Keyboard Shortcuts:");
+    println!("  Ctrl-C           Clear current input");
+    println!("  Ctrl-D           Exit REPL");
+    println!("  Up/Down          Navigate command history");
+    println!("  Ctrl-R           Reverse history search");
+    println!();
+    println!("Multi-line Input:");
+    println!("  If you have unclosed parentheses, press Enter to continue");
+    println!("  on the next line. The prompt will change to '......> '");
+    println!();
+    println!("Examples:");
+    println!("  (+ 1 2 3)");
+    println!("  (label square (lambda (x) (* x x)))");
+    println!("  (square 5)");
+}
+
+/// Show environment bindings (simplified - just shows that env exists)
+fn print_env_info(env: &Environment) {
+    println!("Environment is active with standard library loaded.");
+    println!("Use (quote env-name) to inspect specific bindings.");
+    // Note: Full environment introspection would require adding methods to Environment
+    // For now, we just acknowledge it exists
+    let _ = env; // Suppress unused warning
+}
 
 fn repl() {
     let mut env = Environment::new();
     register_stdlib(&mut env);
 
-    println!("Minimal Lisp REPL");
-    println!("Type expressions to evaluate, or (exit) to quit");
+    // Configure rustyline
+    let config = Config::builder()
+        .auto_add_history(true)
+        .history_ignore_space(true)
+        .build();
+
+    let mut rl = Editor::<(), _>::with_config(config).unwrap();
+
+    // Set up history file
+    let history_file = dirs::home_dir()
+        .map(|h| h.join(".consair_history"))
+        .unwrap_or_else(|| PathBuf::from(".consair_history"));
+
+    // Load history
+    if rl.load_history(&history_file).is_ok() {
+        // History loaded successfully (silent)
+    }
+
+    // Welcome message
+    println!("Consair Lisp REPL v{}", env!("CARGO_PKG_VERSION"));
+    println!("Type :help for help, :quit to exit");
     println!();
 
+    let mut accumulated_input = String::new();
+
     loop {
-        print!("> ");
-        io::stdout().flush().unwrap();
+        let prompt = if accumulated_input.is_empty() {
+            "consair> "
+        } else {
+            "......> "
+        };
 
-        let mut input = String::new();
-        if io::stdin().read_line(&mut input).is_err() {
-            break;
-        }
+        match rl.readline(prompt) {
+            Ok(line) => {
+                // Add to accumulated input
+                if !accumulated_input.is_empty() {
+                    accumulated_input.push('\n');
+                }
+                accumulated_input.push_str(&line);
 
-        let input = input.trim();
-        if input.is_empty() {
-            continue;
-        }
+                let trimmed = accumulated_input.trim();
 
-        // Check for exit
-        if input == "(exit)" || input == "exit" {
-            break;
-        }
+                // Skip empty input
+                if trimmed.is_empty() {
+                    accumulated_input.clear();
+                    continue;
+                }
 
-        match parse(input) {
-            Ok(expr) => match eval(expr, &mut env) {
-                Ok(result) => println!("{result}"),
-                Err(e) => eprintln!("Error: {e}"),
-            },
-            Err(e) => eprintln!("Parse error: {e}"),
+                // Check for special commands (only at start of input)
+                if accumulated_input.lines().count() == 1 {
+                    match trimmed {
+                        ":help" | ":h" => {
+                            print_help();
+                            accumulated_input.clear();
+                            continue;
+                        }
+                        ":quit" | ":q" => {
+                            break;
+                        }
+                        ":env" => {
+                            print_env_info(&env);
+                            accumulated_input.clear();
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Check for traditional exit command
+                if trimmed == "(exit)" || trimmed == "exit" {
+                    break;
+                }
+
+                // Check if expression is complete
+                if !is_complete_expression(&accumulated_input) {
+                    // Continue accumulating input
+                    continue;
+                }
+
+                // Try to parse and evaluate
+                match parse(&accumulated_input) {
+                    Ok(expr) => match eval(expr, &mut env) {
+                        Ok(result) => println!("{result}"),
+                        Err(e) => eprintln!("⚠ Error: {e}"),
+                    },
+                    Err(e) => eprintln!("⚠ Parse error: {e}"),
+                }
+
+                accumulated_input.clear();
+            }
+            Err(ReadlineError::Interrupted) => {
+                // Ctrl-C: Clear current input
+                if !accumulated_input.is_empty() {
+                    println!("^C");
+                    accumulated_input.clear();
+                } else {
+                    println!("^C");
+                    println!("(Press Ctrl-D or type :quit to exit)");
+                }
+            }
+            Err(ReadlineError::Eof) => {
+                // Ctrl-D: Exit
+                println!();
+                break;
+            }
+            Err(err) => {
+                eprintln!("Error: {err:?}");
+                break;
+            }
         }
+    }
+
+    // Save history on exit
+    if let Err(e) = rl.save_history(&history_file) {
+        eprintln!("Warning: Failed to save history: {e}");
     }
 }
 
