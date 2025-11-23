@@ -83,8 +83,8 @@ pub fn eval(expr: Value, env: &mut Environment) -> Result<Value, String> {
             }
         }
 
-        // Lambda and Vector are self-evaluating
-        Value::Lambda(_) | Value::Vector(_) => Ok(expr),
+        // Lambda, Vector, and NativeFn are self-evaluating
+        Value::Lambda(_) | Value::Vector(_) | Value::NativeFn(_) => Ok(expr),
 
         // List evaluation
         Value::Cons(ref cell) => {
@@ -294,6 +294,10 @@ pub fn eval(expr: Value, env: &mut Environment) -> Result<Value, String> {
 
                     let mut new_env = lambda.env.extend(&lambda.params, &args);
                     eval(lambda.body.clone(), &mut new_env)
+                }
+                Value::NativeFn(native_fn) => {
+                    // Call native function with arguments and environment
+                    native_fn(&args, env)
                 }
                 _ => Err(format!("Cannot apply non-function: {func}")),
             }

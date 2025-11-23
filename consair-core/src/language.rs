@@ -194,13 +194,35 @@ pub struct VectorValue {
     pub elements: Vec<Value>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+/// Native function type - Rust functions callable from Lisp
+pub type NativeFn = fn(&[Value], &mut Environment) -> Result<Value, String>;
+
+#[derive(Clone, Debug)]
 pub enum Value {
     Atom(AtomType),
     Cons(Rc<ConsCell>),
     Nil,
     Lambda(Rc<LambdaCell>),
     Vector(Rc<VectorValue>),
+    NativeFn(NativeFn),
+}
+
+// Manual PartialEq implementation because function pointers need special handling
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Atom(a), Value::Atom(b)) => a == b,
+            (Value::Cons(a), Value::Cons(b)) => a == b,
+            (Value::Nil, Value::Nil) => true,
+            (Value::Lambda(a), Value::Lambda(b)) => a == b,
+            (Value::Vector(a), Value::Vector(b)) => a == b,
+            (Value::NativeFn(a), Value::NativeFn(b)) => {
+                // Compare function pointers
+                std::ptr::eq(a as *const _, b as *const _)
+            }
+            _ => false,
+        }
+    }
 }
 
 // ============================================================================
@@ -327,6 +349,7 @@ impl fmt::Display for Value {
                 }
                 write!(f, ">>")
             }
+            Value::NativeFn(_) => write!(f, "<native-fn>"),
         }
     }
 }
