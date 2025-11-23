@@ -17,7 +17,7 @@ fn test_value_is_send_sync() {
         let value_clone = Arc::clone(&value_arc);
         let handle = thread::spawn(move || {
             // Each thread can read the value
-            let _ = format!("Thread {}: {}", i, value_clone);
+            let _ = format!("Thread {i}: {value_clone}");
         });
         handles.push(handle);
     }
@@ -36,7 +36,7 @@ fn test_value_can_be_cloned_across_threads() {
 
     let handle1 = thread::spawn(move || {
         let cloned = value.clone();
-        format!("{}", cloned)
+        format!("{cloned}")
     });
 
     let result = handle1.join().unwrap();

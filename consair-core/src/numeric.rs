@@ -685,7 +685,7 @@ mod tests {
             NumericType::BigRatio(_) => {
                 // Correct - promoted to BigRatio
             }
-            other => panic!("Expected BigRatio for overflow case, got {:?}", other),
+            other => panic!("Expected BigRatio for overflow case, got {other:?}"),
         }
     }
 
@@ -718,12 +718,12 @@ mod tests {
         // Both should produce BigRatio
         match r1.add(&i1).unwrap() {
             NumericType::BigRatio(_) => {}
-            other => panic!("Expected BigRatio, got {:?}", other),
+            other => panic!("Expected BigRatio, got {other:?}"),
         }
 
         match r2.sub(&i2).unwrap() {
             NumericType::BigRatio(_) => {}
-            other => panic!("Expected BigRatio, got {:?}", other),
+            other => panic!("Expected BigRatio, got {other:?}"),
         }
     }
 }

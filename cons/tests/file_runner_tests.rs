@@ -228,7 +228,7 @@ fn test_whitespace_only_file() {
 
 #[test]
 fn test_unclosed_paren() {
-    let mut input = String::from("(cons 1 2"); // missing closing paren
+    let input = String::from("(cons 1 2"); // missing closing paren
     let result = run_lisp_file(&input);
     assert!(result.is_err());
     let err = result.unwrap_err();
