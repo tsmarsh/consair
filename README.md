@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/logo.png" alt="Consair Logo" width="200"/>
+</p>
+
 # Consair - Minimal Lisp in Rust
 
 [![CI](https://github.com/tsmarsh/consair/workflows/CI/badge.svg)](https://github.com/tsmarsh/consair/actions)
