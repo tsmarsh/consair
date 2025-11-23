@@ -106,8 +106,183 @@ fn bench_eval_lambda_invocation(c: &mut Criterion) {
     });
 }
 
-// Note: Recursive benchmarks are skipped due to label/environment scoping complexity
-// They would need to be measured manually outside of criterion
+// ============================================================================
+// Recursive Function Benchmarks
+// ============================================================================
+
+fn bench_recursive_factorial(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    // Define factorial function
+    let setup = parse(
+        r#"
+        (label factorial (lambda (n)
+            (cond
+                ((= n 0) 1)
+                (t (* n (factorial (- n 1)))))))
+    "#,
+    )
+    .unwrap();
+    eval(setup, &mut env).unwrap();
+
+    c.bench_function("recursive factorial(10)", |b| {
+        b.iter(|| {
+            let expr = parse("(factorial 10)").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_recursive_fibonacci(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    // Define fibonacci function
+    let setup = parse(
+        r#"
+        (label fib (lambda (n)
+            (cond
+                ((= n 0) 0)
+                ((= n 1) 1)
+                (t (+ (fib (- n 1)) (fib (- n 2)))))))
+    "#,
+    )
+    .unwrap();
+    eval(setup, &mut env).unwrap();
+
+    c.bench_function("recursive fibonacci(10)", |b| {
+        b.iter(|| {
+            let expr = parse("(fib 10)").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_recursive_list_length(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    // Define length function
+    let setup = parse(
+        r#"
+        (label length (lambda (lst)
+            (cond
+                ((atom lst) 0)
+                (t (+ 1 (length (cdr lst)))))))
+    "#,
+    )
+    .unwrap();
+    eval(setup, &mut env).unwrap();
+
+    c.bench_function("recursive list-length(100)", |b| {
+        b.iter(|| {
+            // Create a list of 100 elements
+            let mut list = Value::Nil;
+            for i in (0..100).rev() {
+                list = cons(Value::Atom(AtomType::Number(NumericType::Int(i))), list);
+            }
+            env.define("test-list".to_string(), list);
+
+            let expr = parse("(length test-list)").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_recursive_sum_list(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    // Define sum function
+    let setup = parse(
+        r#"
+        (label sum (lambda (lst)
+            (cond
+                ((atom lst) 0)
+                (t (+ (car lst) (sum (cdr lst)))))))
+    "#,
+    )
+    .unwrap();
+    eval(setup, &mut env).unwrap();
+
+    // Pre-create the list
+    let mut list = Value::Nil;
+    for i in (0..50).rev() {
+        list = cons(Value::Atom(AtomType::Number(NumericType::Int(i))), list);
+    }
+    env.define("test-list".to_string(), list);
+
+    c.bench_function("recursive sum-list(50)", |b| {
+        b.iter(|| {
+            let expr = parse("(sum test-list)").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_tco_deep_recursion(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    // Define countdown function (tail recursive)
+    let setup = parse(
+        r#"
+        (label countdown (lambda (n)
+            (cond
+                ((= n 0) 0)
+                (t (countdown (- n 1))))))
+    "#,
+    )
+    .unwrap();
+    eval(setup, &mut env).unwrap();
+
+    c.bench_function("TCO deep recursion(1000)", |b| {
+        b.iter(|| {
+            let expr = parse("(countdown 1000)").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_mutual_recursion(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    // Define mutually recursive is-even/is-odd (must be done separately)
+    let setup1 = parse(
+        r#"
+        (label is-even (lambda (n)
+            (cond
+                ((= n 0) t)
+                (t (is-odd (- n 1))))))
+    "#,
+    )
+    .unwrap();
+    eval(setup1, &mut env).unwrap();
+
+    let setup2 = parse(
+        r#"
+        (label is-odd (lambda (n)
+            (cond
+                ((= n 0) nil)
+                (t (is-even (- n 1))))))
+    "#,
+    )
+    .unwrap();
+    eval(setup2, &mut env).unwrap();
+
+    c.bench_function("mutual recursion is-even(100)", |b| {
+        b.iter(|| {
+            let expr = parse("(is-even 100)").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+// ============================================================================
+// Environment Benchmarks
+// ============================================================================
 
 fn bench_env_lookup_shallow(c: &mut Criterion) {
     let mut env = Environment::new();
@@ -166,7 +341,7 @@ fn bench_env_define(c: &mut Criterion) {
     c.bench_function("env define", |b| {
         let mut counter = 0;
         b.iter(|| {
-            let mut env = Environment::new();
+            let env = Environment::new();
             env.define(
                 format!("var{counter}"),
                 Value::Atom(AtomType::Number(NumericType::Int(counter))),
@@ -506,10 +681,25 @@ criterion_group! {
         bench_symbol_intern_repeated
 }
 
+criterion_group! {
+    name = recursive_benches;
+    config = Criterion::default()
+        .sample_size(100)
+        .measurement_time(Duration::from_secs(10));
+    targets =
+        bench_recursive_factorial,
+        bench_recursive_fibonacci,
+        bench_recursive_list_length,
+        bench_recursive_sum_list,
+        bench_tco_deep_recursion,
+        bench_mutual_recursion
+}
+
 criterion_main!(
     parsing_benches,
     eval_benches,
     numeric_benches,
     list_benches,
-    string_benches
+    string_benches,
+    recursive_benches
 );

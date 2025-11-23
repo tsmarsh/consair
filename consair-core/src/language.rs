@@ -175,11 +175,30 @@ pub struct ConsCell {
     pub cdr: Value,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone)]
 pub struct LambdaCell {
     pub params: Vec<InternedSymbol>,
     pub body: Value,
     pub env: Environment,
+}
+
+// Manual implementations since Environment uses RwLock (doesn't impl Debug/PartialEq)
+impl std::fmt::Debug for LambdaCell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LambdaCell")
+            .field("params", &self.params)
+            .field("body", &self.body)
+            .field("env", &"<environment>")
+            .finish()
+    }
+}
+
+impl PartialEq for LambdaCell {
+    fn eq(&self, other: &Self) -> bool {
+        // Compare only params and body, not environment
+        // (environments with same bindings but different Arc pointers would differ)
+        self.params == other.params && self.body == other.body
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

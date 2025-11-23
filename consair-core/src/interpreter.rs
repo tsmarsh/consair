@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::language::{AtomType, LambdaCell, SymbolType, Value, car, cdr, cons, eq, is_atom};
 use crate::numeric::NumericType;
@@ -8,10 +8,16 @@ use crate::numeric::NumericType;
 // Environment
 // ============================================================================
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Environment {
-    bindings: Arc<HashMap<String, Value>>,
+// Internal state holding the data and parent pointer
+struct EnvironmentState {
+    data: HashMap<String, Value>,
     parent: Option<Arc<Environment>>,
+}
+
+// The public wrapper that is cheap to clone
+#[derive(Clone)]
+pub struct Environment {
+    state: Arc<RwLock<EnvironmentState>>,
 }
 
 impl Default for Environment {
@@ -21,37 +27,50 @@ impl Default for Environment {
 }
 
 impl Environment {
+    /// Create a new, empty global environment
     pub fn new() -> Self {
         Environment {
-            bindings: Arc::new(HashMap::new()),
-            parent: None,
+            state: Arc::new(RwLock::new(EnvironmentState {
+                data: HashMap::new(),
+                parent: None,
+            })),
         }
     }
 
+    /// Create a child environment extending the current one
     fn extend(&self, params: &[crate::interner::InternedSymbol], args: &[Value]) -> Self {
-        let mut bindings = HashMap::new();
+        let mut data = HashMap::new();
         for (param, arg) in params.iter().zip(args.iter()) {
-            bindings.insert(param.resolve(), arg.clone());
+            data.insert(param.resolve(), arg.clone());
         }
+
         Environment {
-            bindings: Arc::new(bindings),
-            parent: Some(Arc::new(self.clone())),
+            state: Arc::new(RwLock::new(EnvironmentState {
+                data,
+                // The child holds a reference to the parent's wrapper
+                parent: Some(Arc::new(self.clone())),
+            })),
         }
     }
 
-    pub fn define(&mut self, name: String, value: Value) {
-        // Copy-on-Write optimization using Arc::make_mut
-        // Only clones if Arc has multiple strong references
-        Arc::make_mut(&mut self.bindings).insert(name, value);
+    /// Define a variable in the CURRENT scope (mutating the shared state)
+    pub fn define(&self, name: String, value: Value) {
+        let mut state = self.state.write().unwrap();
+        state.data.insert(name, value);
     }
 
+    /// Look up a variable, walking up the parent chain
     fn lookup(&self, name: &str) -> Option<Value> {
-        if let Some(value) = self.bindings.get(name) {
-            Some(value.clone())
-        } else if let Some(ref parent) = self.parent {
-            parent.lookup(name)
-        } else {
-            None
+        let state = self.state.read().unwrap();
+
+        if let Some(val) = state.data.get(name) {
+            return Some(val.clone());
+        }
+
+        // Recursive lookup in parent
+        match &state.parent {
+            Some(parent) => parent.lookup(name),
+            None => None,
         }
     }
 }

@@ -16,7 +16,7 @@ This directory contains detailed implementation prompts for improving the Consai
 7. ~~[Implement Tail Call Optimization](07-implement-tail-call-optimization.md)~~ - ✅ **COMPLETED** (via proposal #3)
 8. ~~[Add Property-Based Testing](08-add-property-based-tests.md)~~ - ✅ **COMPLETED** (Property tests for numeric operations with 1000 cases each)
 9. ~~[Add Comprehensive Benchmarks](09-add-benchmarks.md)~~ - ✅ **COMPLETED** (38 benchmarks covering parsing, eval, numeric, list, and string operations with HTML reports)
-15. [Add Recursive Function Support](15-add-recursive-function-support.md) - Fix `label` to enable self-reference for recursive algorithms
+15. ~~[Add Recursive Function Support](15-add-recursive-function-support.md)~~ - ✅ **COMPLETED** (Arc<RwLock> interior mutability enables recursion and mutual recursion)
 
 ### 🟢 Medium Priority
 10. ~~[Improve REPL Experience](10-improve-repl.md)~~ - ✅ **COMPLETED** (rustyline integration with history, multi-line input, and special commands)

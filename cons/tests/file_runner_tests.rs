@@ -330,3 +330,99 @@ fn test_comment_between_list_elements() {
     // Comments are now natively supported in the lexer
     assert_eq!(result.unwrap(), "(1 . 2)");
 }
+
+// ============================================================================
+// Recursive Function Tests
+// ============================================================================
+
+#[test]
+fn test_recursive_factorial() {
+    let result = run_lisp_file(
+        r#"
+(label factorial (lambda (n)
+  (cond
+    ((= n 0) 1)
+    (t (* n (factorial (- n 1)))))))
+(factorial 5)
+"#,
+    );
+    assert_eq!(result.unwrap(), "120");
+}
+
+#[test]
+fn test_recursive_fibonacci() {
+    let result = run_lisp_file(
+        r#"
+(label fib (lambda (n)
+  (cond
+    ((= n 0) 0)
+    ((= n 1) 1)
+    (t (+ (fib (- n 1)) (fib (- n 2)))))))
+(fib 10)
+"#,
+    );
+    assert_eq!(result.unwrap(), "55");
+}
+
+#[test]
+fn test_recursive_list_length() {
+    let result = run_lisp_file(
+        r#"
+(label length (lambda (lst)
+  (cond
+    ((atom lst) 0)
+    (t (+ 1 (length (cdr lst)))))))
+(length '(1 2 3 4 5))
+"#,
+    );
+    assert_eq!(result.unwrap(), "5");
+}
+
+#[test]
+fn test_mutually_recursive_functions() {
+    let result = run_lisp_file(
+        r#"
+(label is-even (lambda (n)
+  (cond
+    ((= n 0) t)
+    (t (is-odd (- n 1))))))
+
+(label is-odd (lambda (n)
+  (cond
+    ((= n 0) nil)
+    (t (is-even (- n 1))))))
+
+(cons (is-even 4) (is-odd 4))
+"#,
+    );
+    assert_eq!(result.unwrap(), "(t)");
+}
+
+#[test]
+fn test_recursive_sum_list() {
+    let result = run_lisp_file(
+        r#"
+(label sum (lambda (lst)
+  (cond
+    ((atom lst) 0)
+    (t (+ (car lst) (sum (cdr lst)))))))
+(sum '(1 2 3 4 5))
+"#,
+    );
+    assert_eq!(result.unwrap(), "15");
+}
+
+#[test]
+fn test_recursive_deep_nesting() {
+    // Test that deeply recursive calls work (TCO should handle this)
+    let result = run_lisp_file(
+        r#"
+(label countdown (lambda (n)
+  (cond
+    ((= n 0) 0)
+    (t (countdown (- n 1))))))
+(countdown 1000)
+"#,
+    );
+    assert_eq!(result.unwrap(), "0");
+}
