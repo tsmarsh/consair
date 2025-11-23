@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::language::{AtomType, LambdaCell, Value, car, cdr, cons, eq, is_atom};
+use crate::language::{AtomType, LambdaCell, SymbolType, Value, car, cdr, cons, eq, is_atom};
 use crate::numeric::NumericType;
 
 // ============================================================================
@@ -64,12 +64,24 @@ impl Environment {
 pub fn eval(expr: Value, env: &mut Environment) -> Result<Value, String> {
     match expr {
         // Self-evaluating forms
-        Value::Atom(AtomType::Number(_)) | Value::Atom(AtomType::Bool(_)) | Value::Nil => Ok(expr),
+        Value::Atom(AtomType::Number(_))
+        | Value::Atom(AtomType::Bool(_))
+        | Value::Atom(AtomType::String(_))
+        | Value::Atom(AtomType::Char(_))
+        | Value::Nil => Ok(expr),
 
-        // Symbol lookup
-        Value::Atom(AtomType::Symbol(ref name)) => env
-            .lookup(name)
-            .ok_or_else(|| format!("Unbound symbol: {name}")),
+        // Symbol lookup (not keywords)
+        Value::Atom(AtomType::Symbol(ref sym)) => {
+            match sym {
+                SymbolType::Symbol(name) => env
+                    .lookup(name)
+                    .ok_or_else(|| format!("Unbound symbol: {name}")),
+                SymbolType::Keyword { .. } => {
+                    // Keywords are self-evaluating
+                    Ok(expr)
+                }
+            }
+        }
 
         // Lambda and Vector are self-evaluating
         Value::Lambda(_) | Value::Vector(_) => Ok(expr),
@@ -79,7 +91,7 @@ pub fn eval(expr: Value, env: &mut Environment) -> Result<Value, String> {
             let operator = &cell.car;
 
             // Special forms
-            if let Value::Atom(AtomType::Symbol(name)) = operator {
+            if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(name))) = operator {
                 match name.as_str() {
                     "quote" => {
                         let arg = car(&cell.cdr)?;
@@ -151,7 +163,9 @@ pub fn eval(expr: Value, env: &mut Environment) -> Result<Value, String> {
                         let mut params = Vec::new();
                         let mut current = params_expr;
                         while let Value::Cons(ref param_cell) = current {
-                            if let Value::Atom(AtomType::Symbol(ref name)) = param_cell.car {
+                            if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(name))) =
+                                &param_cell.car
+                            {
                                 params.push(name.clone());
                             } else {
                                 return Err("lambda parameters must be symbols".to_string());
@@ -169,7 +183,7 @@ pub fn eval(expr: Value, env: &mut Environment) -> Result<Value, String> {
                         let name_expr = car(&cell.cdr)?;
                         let fn_expr = car(&cdr(&cell.cdr)?)?;
 
-                        if let Value::Atom(AtomType::Symbol(name)) = name_expr {
+                        if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(name))) = name_expr {
                             let fn_val = eval(fn_expr, env)?;
                             env.define(name.clone(), fn_val.clone());
                             return Ok(fn_val);

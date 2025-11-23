@@ -1,4 +1,4 @@
-use consair::{AtomType, Environment, NumericType, Value, eval, parse};
+use consair::{AtomType, Environment, NumericType, Value, eval, language, parse};
 
 // ============================================================================
 // Numeric Type Tests
@@ -24,7 +24,7 @@ fn test_int_overflow_promotion() {
     let result = max_int.add(&one).unwrap();
     match result {
         NumericType::BigInt(_) => {} // Success
-        _ => panic!("Expected BigInt promotion on overflow, got {:?}", result),
+        _ => panic!("Expected BigInt promotion on overflow, got {result:?}"),
     }
 }
 
@@ -37,7 +37,7 @@ fn test_int_underflow_promotion() {
     let result = min_int.sub(&one).unwrap();
     match result {
         NumericType::BigInt(_) => {} // Success
-        _ => panic!("Expected BigInt promotion on underflow, got {:?}", result),
+        _ => panic!("Expected BigInt promotion on underflow, got {result:?}"),
     }
 }
 
@@ -196,9 +196,9 @@ fn test_negation() {
     let ratio = NumericType::Ratio(3, 4);
     assert_eq!(ratio.neg().unwrap(), NumericType::Ratio(-3, 4));
 
-    let float_val = NumericType::Float(3.14);
+    let float_val = NumericType::Float(3.15);
     match float_val.neg().unwrap() {
-        NumericType::Float(result) => assert!((result + 3.14).abs() < 1e-10),
+        NumericType::Float(result) => assert!((result + 3.15).abs() < 1e-10),
         _ => panic!("Expected Float result"),
     }
 }
@@ -228,7 +228,7 @@ fn test_parse_integer() {
     let result = parse("42").unwrap();
     match result {
         Value::Atom(AtomType::Number(NumericType::Int(n))) => assert_eq!(n, 42),
-        _ => panic!("Expected Int(42), got {:?}", result),
+        _ => panic!("Expected Int(42), got {result:?}"),
     }
 }
 
@@ -237,18 +237,18 @@ fn test_parse_negative_integer() {
     let result = parse("-42").unwrap();
     match result {
         Value::Atom(AtomType::Number(NumericType::Int(n))) => assert_eq!(n, -42),
-        _ => panic!("Expected Int(-42), got {:?}", result),
+        _ => panic!("Expected Int(-42), got {result:?}"),
     }
 }
 
 #[test]
 fn test_parse_float() {
-    let result = parse("3.14").unwrap();
+    let result = parse("3.15").unwrap();
     match result {
         Value::Atom(AtomType::Number(NumericType::Float(f))) => {
-            assert!((f - 3.14).abs() < 1e-10);
+            assert!((f - 3.15).abs() < 1e-10);
         }
-        _ => panic!("Expected Float(3.14), got {:?}", result),
+        _ => panic!("Expected Float(3.15), got {result:?}"),
     }
 }
 
@@ -259,7 +259,7 @@ fn test_parse_scientific_notation() {
         Value::Atom(AtomType::Number(NumericType::Float(f))) => {
             assert!((f - 1.5e10).abs() < 1e-10);
         }
-        _ => panic!("Expected Float(1.5e10), got {:?}", result),
+        _ => panic!("Expected Float(1.5e10), got {result:?}"),
     }
 
     let result2 = parse("2e-5").unwrap();
@@ -267,7 +267,7 @@ fn test_parse_scientific_notation() {
         Value::Atom(AtomType::Number(NumericType::Float(f))) => {
             assert!((f - 2e-5).abs() < 1e-15);
         }
-        _ => panic!("Expected Float(2e-5), got {:?}", result2),
+        _ => panic!("Expected Float(2e-5), got {result2:?}"),
     }
 }
 
@@ -279,7 +279,7 @@ fn test_parse_ratio() {
             assert_eq!(num, 5);
             assert_eq!(denom, 2);
         }
-        _ => panic!("Expected Ratio(5, 2), got {:?}", result),
+        _ => panic!("Expected Ratio(5, 2), got {result:?}"),
     }
 }
 
@@ -292,7 +292,7 @@ fn test_parse_ratio_auto_reduction() {
             assert_eq!(num, 2);
             assert_eq!(denom, 3);
         }
-        _ => panic!("Expected Ratio(2, 3), got {:?}", result),
+        _ => panic!("Expected Ratio(2, 3), got {result:?}"),
     }
 }
 
@@ -303,7 +303,7 @@ fn test_parse_ratio_reduces_to_int() {
         Value::Atom(AtomType::Number(NumericType::Int(n))) => {
             assert_eq!(n, 2);
         }
-        _ => panic!("Expected Int(2), got {:?}", result),
+        _ => panic!("Expected Int(2), got {result:?}"),
     }
 }
 
@@ -319,7 +319,7 @@ fn test_eval_addition() {
 
     match result {
         Value::Atom(AtomType::Number(NumericType::Int(n))) => assert_eq!(n, 8),
-        _ => panic!("Expected Int(8), got {:?}", result),
+        _ => panic!("Expected Int(8), got {result:?}"),
     }
 }
 
@@ -331,7 +331,7 @@ fn test_eval_subtraction() {
 
     match result {
         Value::Atom(AtomType::Number(NumericType::Int(n))) => assert_eq!(n, 7),
-        _ => panic!("Expected Int(7), got {:?}", result),
+        _ => panic!("Expected Int(7), got {result:?}"),
     }
 }
 
@@ -343,7 +343,7 @@ fn test_eval_multiplication() {
 
     match result {
         Value::Atom(AtomType::Number(NumericType::Int(n))) => assert_eq!(n, 42),
-        _ => panic!("Expected Int(42), got {:?}", result),
+        _ => panic!("Expected Int(42), got {result:?}"),
     }
 }
 
@@ -359,7 +359,7 @@ fn test_eval_division_exact() {
             assert_eq!(num, 5);
             assert_eq!(denom, 2);
         }
-        _ => panic!("Expected Ratio(5, 2), got {:?}", result),
+        _ => panic!("Expected Ratio(5, 2), got {result:?}"),
     }
 }
 
@@ -371,7 +371,7 @@ fn test_eval_division_evenly() {
 
     match result {
         Value::Atom(AtomType::Number(NumericType::Int(n))) => assert_eq!(n, 2),
-        _ => panic!("Expected Int(2), got {:?}", result),
+        _ => panic!("Expected Int(2), got {result:?}"),
     }
 }
 
@@ -388,7 +388,7 @@ fn test_eval_ratio_arithmetic() {
             assert_eq!(num, 5);
             assert_eq!(denom, 6);
         }
-        _ => panic!("Expected Ratio(5, 6), got {:?}", result),
+        _ => panic!("Expected Ratio(5, 6), got {result:?}"),
     }
 }
 
@@ -402,7 +402,7 @@ fn test_eval_float_arithmetic() {
         Value::Atom(AtomType::Number(NumericType::Float(f))) => {
             assert!((f - 6.0).abs() < 1e-10);
         }
-        _ => panic!("Expected Float(6.0), got {:?}", result),
+        _ => panic!("Expected Float(6.0), got {result:?}"),
     }
 }
 
@@ -459,7 +459,7 @@ fn test_eval_nested_arithmetic() {
 
     match result {
         Value::Atom(AtomType::Number(NumericType::Int(n))) => assert_eq!(n, 8),
-        _ => panic!("Expected Int(8), got {:?}", result),
+        _ => panic!("Expected Int(8), got {result:?}"),
     }
 }
 
@@ -474,7 +474,7 @@ fn test_eval_overflow_in_expression() {
 
     match result {
         Value::Atom(AtomType::Number(NumericType::BigInt(_))) => {} // Success
-        _ => panic!("Expected BigInt promotion, got {:?}", result),
+        _ => panic!("Expected BigInt promotion, got {result:?}"),
     }
 }
 
@@ -487,8 +487,8 @@ fn test_ratio_in_conditional() {
     let result = eval(expr, &mut env).unwrap();
 
     match result {
-        Value::Atom(AtomType::Symbol(s)) => assert_eq!(s, "yes"),
-        _ => panic!("Expected symbol 'yes', got {:?}", result),
+        Value::Atom(AtomType::Symbol(language::SymbolType::Symbol(s))) => assert_eq!(s, "yes"),
+        _ => panic!("Expected symbol 'yes', got {result:?}"),
     }
 }
 
@@ -502,7 +502,7 @@ fn test_numeric_precision_preservation() {
 
     match result {
         Value::Atom(AtomType::Number(NumericType::Int(n))) => assert_eq!(n, 1),
-        _ => panic!("Expected exact Int(1), got {:?}", result),
+        _ => panic!("Expected exact Int(1), got {result:?}"),
     }
 }
 

@@ -643,11 +643,11 @@ mod tests {
 
     #[test]
     fn test_float_operations() {
-        let a = NumericType::Float(3.14);
+        let a = NumericType::Float(3.15);
         let b = NumericType::Float(2.0);
 
         if let NumericType::Float(result) = a.add(&b).unwrap() {
-            assert!((result - 5.14).abs() < 1e-10);
+            assert!((result - 5.15).abs() < 1e-10);
         } else {
             panic!("Expected Float result");
         }
