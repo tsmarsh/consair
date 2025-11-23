@@ -640,11 +640,11 @@ impl Lexer {
             } else if (ch == 'e' || ch == 'E') && !has_slash {
                 text.push(ch);
                 self.advance();
-                if let Some(&sign) = self.input.get(self.position) {
-                    if sign == '+' || sign == '-' {
-                        text.push(sign);
-                        self.advance();
-                    }
+                if let Some(&sign) = self.input.get(self.position)
+                    && (sign == '+' || sign == '-')
+                {
+                    text.push(sign);
+                    self.advance();
                 }
                 has_dot = true; // Mark as float
             } else {
@@ -655,14 +655,12 @@ impl Lexer {
         // Parse the number
         if has_slash {
             let parts: Vec<&str> = text.split('/').collect();
-            if parts.len() == 2 {
-                if let (Ok(numerator), Ok(denominator)) =
+            if parts.len() == 2
+                && let (Ok(numerator), Ok(denominator)) =
                     (parts[0].parse::<i64>(), parts[1].parse::<i64>())
-                {
-                    if let Ok(ratio) = NumericType::make_ratio(numerator, denominator) {
-                        return Token::Number(ratio);
-                    }
-                }
+                && let Ok(ratio) = NumericType::make_ratio(numerator, denominator)
+            {
+                return Token::Number(ratio);
             }
             Token::Symbol(text)
         } else if has_dot || text.contains('e') || text.contains('E') {
