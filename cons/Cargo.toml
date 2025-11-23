@@ -13,6 +13,9 @@ repository = "https://github.com/tsmarsh/consair"
 [dependencies]
 consair-core = { workspace = true }
 
+[dev-dependencies]
+rand = "0.8"
+
 [[bin]]
 name = "cons"
 path = "src/main.rs"
