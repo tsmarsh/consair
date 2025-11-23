@@ -22,6 +22,7 @@ unicode-normalization = "0.1"
 
 [dev-dependencies]
 proptest = "1.4"
+criterion = { version = "0.5", features = ["html_reports"] }
 
 [lib]
 name = "consair"
@@ -29,4 +30,8 @@ path = "src/lib.rs"
 
 [[bench]]
 name = "environment_bench"
+harness = false
+
+[[bench]]
+name = "benchmarks"
 harness = false

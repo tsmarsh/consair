@@ -15,7 +15,7 @@ This directory contains detailed implementation prompts for improving the Consai
 6. ~~[Split Parser Module](06-split-parser-module.md)~~ - ✅ **COMPLETED** (Lexer/Parser separated into distinct modules)
 7. ~~[Implement Tail Call Optimization](07-implement-tail-call-optimization.md)~~ - ✅ **COMPLETED** (via proposal #3)
 8. ~~[Add Property-Based Testing](08-add-property-based-tests.md)~~ - ✅ **COMPLETED** (Property tests for numeric operations with 1000 cases each)
-9. [Add Comprehensive Benchmarks](09-add-benchmarks.md) - Measure and track performance
+9. ~~[Add Comprehensive Benchmarks](09-add-benchmarks.md)~~ - ✅ **COMPLETED** (38 benchmarks covering parsing, eval, numeric, list, and string operations with HTML reports)
 
 ### 🟢 Medium Priority
 10. [Improve REPL Experience](10-improve-repl.md) - Modern interactive shell with history
