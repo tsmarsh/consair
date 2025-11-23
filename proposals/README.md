@@ -10,7 +10,7 @@ This directory contains detailed implementation prompts for improving the Consai
 3. ~~[Add Recursion Depth Limit](03-add-recursion-depth-limit.md)~~ - ✅ **COMPLETED** (Full TCO implemented)
 
 ### 🟡 High Priority
-4. [Optimize Environment Performance](04-optimize-environment-performance.md) - Reduce HashMap cloning overhead
+4. ~~[Optimize Environment Performance](04-optimize-environment-performance.md)~~ - ✅ **COMPLETED** (Arc::make_mut CoW optimization)
 5. [Add String Interning](05-add-string-interning.md) - Reduce memory usage and improve comparison speed
 6. [Split Parser Module](06-split-parser-module.md) - Better code organization
 7. ~~[Implement Tail Call Optimization](07-implement-tail-call-optimization.md)~~ - ✅ **COMPLETED** (via proposal #3)

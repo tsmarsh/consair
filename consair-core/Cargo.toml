@@ -21,3 +21,7 @@ unicode-normalization = "0.1"
 [lib]
 name = "consair"
 path = "src/lib.rs"
+
+[[bench]]
+name = "environment_bench"
+harness = false

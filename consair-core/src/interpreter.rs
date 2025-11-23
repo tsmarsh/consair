@@ -40,10 +40,9 @@ impl Environment {
     }
 
     pub fn define(&mut self, name: String, value: Value) {
-        // Create a new HashMap with the existing bindings plus the new one
-        let mut new_bindings = (*self.bindings).clone();
-        new_bindings.insert(name, value);
-        self.bindings = Arc::new(new_bindings);
+        // Copy-on-Write optimization using Arc::make_mut
+        // Only clones if Arc has multiple strong references
+        Arc::make_mut(&mut self.bindings).insert(name, value);
     }
 
     fn lookup(&self, name: &str) -> Option<Value> {
