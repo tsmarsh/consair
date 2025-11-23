@@ -291,10 +291,48 @@ Both results share the same underlying cons cells for `(3 4)`.
 - **Other primitives**: No allocation, only read/compare existing values
 - **Deallocation**: Automatic when last `Arc` is dropped (atomic reference counting)
 
+### Tail Call Optimization
+
+Consair implements **full tail call optimization (TCO)**, enabling unbounded recursion for tail-recursive functions:
+
+```lisp
+; This countdown function uses tail recursion
+; Without TCO, this would overflow the stack
+> (label countdown (lambda (n)
+    (cond
+      ((= n 0) "done")
+      (t (countdown (- n 1))))))
+<lambda>
+
+; Can handle arbitrarily deep recursion
+> (countdown 50000)
+"done"
+```
+
+**How TCO Works:**
+- The interpreter transforms tail-recursive calls into iteration using a loop
+- Tail positions (final expressions in `cond` branches, lambda body returns) reuse the same stack frame
+- Non-tail recursive calls still use the call stack and are limited to a depth of 10,000
+
+**Tail vs Non-Tail Recursion:**
+```lisp
+; TAIL RECURSIVE (unbounded):
+(label sum-tail (lambda (n acc)
+  (cond
+    ((= n 0) acc)
+    (t (sum-tail (- n 1) (+ acc n))))))  ; Last operation is the recursive call
+
+; NON-TAIL RECURSIVE (limited to depth 10,000):
+(label factorial (lambda (n)
+  (cond
+    ((= n 0) 1)
+    (t (* n (factorial (- n 1)))))))  ; Recursive call followed by multiplication
+```
+
 ### Limitations
 
 1. **Circular references leak**: Don't create circular data structures
-2. **No tail call optimization**: Deep recursion will overflow the stack
+2. **Non-tail recursion depth**: Limited to 10,000 levels (tail calls have no limit)
 
 ## Architecture
 
@@ -384,6 +422,7 @@ This implementation achieves all design goals:
 ✅ Minimal unsafe code (only verified Send + Sync impls)
 ✅ Automatic memory management (no manual free)
 ✅ Can implement complex functions in terms of primitives
+✅ Tail call optimization enables unbounded recursion
 
 ## References
 

@@ -7,13 +7,13 @@ This directory contains detailed implementation prompts for improving the Consai
 ### 🔴 Critical (Do First)
 1. ~~[Fix Main.rs Expression Parser Bug](01-fix-main-parser-bug.md)~~ - ✅ **COMPLETED**
 2. ~~[Fix Numeric Overflow Bug](02-fix-numeric-overflow-bug.md)~~ - ✅ **COMPLETED**
-3. [Add Recursion Depth Limit](03-add-recursion-depth-limit.md) - Prevent stack overflow crashes
+3. ~~[Add Recursion Depth Limit](03-add-recursion-depth-limit.md)~~ - ✅ **COMPLETED** (Full TCO implemented)
 
 ### 🟡 High Priority
 4. [Optimize Environment Performance](04-optimize-environment-performance.md) - Reduce HashMap cloning overhead
 5. [Add String Interning](05-add-string-interning.md) - Reduce memory usage and improve comparison speed
 6. [Split Parser Module](06-split-parser-module.md) - Better code organization
-7. [Implement Tail Call Optimization](07-implement-tail-call-optimization.md) - Enable unbounded recursion
+7. ~~[Implement Tail Call Optimization](07-implement-tail-call-optimization.md)~~ - ✅ **COMPLETED** (via proposal #3)
 8. [Add Property-Based Testing](08-add-property-based-tests.md) - Find edge cases automatically
 9. [Add Comprehensive Benchmarks](09-add-benchmarks.md) - Measure and track performance
 
