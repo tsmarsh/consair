@@ -1,7 +1,7 @@
+use codspeed_criterion_compat::{Criterion, black_box, criterion_group, criterion_main};
 use consair::interner::InternedSymbol;
 use consair::language::AtomType;
 use consair::{Environment, NumericType, Value, cons, eval, parse, register_stdlib};
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use std::time::Duration;
 
 // ============================================================================
