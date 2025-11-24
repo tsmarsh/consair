@@ -36,13 +36,13 @@ fn extract_bool(value: &Value) -> bool {
     }
 }
 
-/// Extract a value from an association list by key
+/// Extract a value from an association list by key (using symbols)
 fn alist_get(alist: &Value, key_name: &str) -> Option<Value> {
     let mut current = alist.clone();
 
     while let Value::Cons(ref outer_cell) = current {
         if let Value::Cons(ref pair) = outer_cell.car
-            && let Value::Atom(AtomType::Symbol(SymbolType::Keyword { name, .. })) = &pair.car
+            && let Value::Atom(AtomType::Symbol(SymbolType::Symbol(name))) = &pair.car
             && name.with_str(|s| s == key_name)
         {
             return Some(pair.cdr.clone());

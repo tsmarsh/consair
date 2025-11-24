@@ -1,28 +1,38 @@
-use consair::{
-    AtomType, Environment, NumericType, Value, VectorValue, eval, interner::InternedSymbol,
-    language, parse,
-};
-use std::sync::Arc;
+use consair::{AtomType, Environment, NumericType, Value, eval, parse, register_stdlib};
+
+fn eval_vector(expr: &str) -> Value {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+    let parsed = parse(expr).unwrap();
+    eval(parsed, &mut env).unwrap()
+}
+
+fn eval_vector_result(expr: &str) -> Result<Value, String> {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+    let parsed = parse(expr)?;
+    eval(parsed, &mut env)
+}
 
 // ============================================================================
-// Vector Parsing Tests
+// Vector Construction Tests
 // ============================================================================
 
 #[test]
-fn test_empty_vector_parse() {
-    let expr = parse("<< >>").unwrap();
-    match expr {
+fn test_empty_vector() {
+    let result = eval_vector("(vector)");
+    match result {
         Value::Vector(vec) => {
             assert_eq!(vec.elements.len(), 0);
         }
-        _ => panic!("Expected vector, got {expr}"),
+        _ => panic!("Expected vector, got {result}"),
     }
 }
 
 #[test]
-fn test_vector_parse_integers() {
-    let expr = parse("<< 1 2 3 >>").unwrap();
-    match expr {
+fn test_vector_integers() {
+    let result = eval_vector("(vector 1 2 3)");
+    match result {
         Value::Vector(vec) => {
             assert_eq!(vec.elements.len(), 3);
             assert_eq!(
@@ -38,14 +48,14 @@ fn test_vector_parse_integers() {
                 Value::Atom(AtomType::Number(NumericType::Int(3)))
             );
         }
-        _ => panic!("Expected vector, got {expr}"),
+        _ => panic!("Expected vector, got {result}"),
     }
 }
 
 #[test]
-fn test_vector_parse_mixed_types() {
-    let expr = parse("<< 1 2.5 3/4 >>").unwrap();
-    match expr {
+fn test_vector_mixed_types() {
+    let result = eval_vector("(vector 1 2.5 3/4)");
+    match result {
         Value::Vector(vec) => {
             assert_eq!(vec.elements.len(), 3);
             assert_eq!(
@@ -61,67 +71,8 @@ fn test_vector_parse_mixed_types() {
                 Value::Atom(AtomType::Number(NumericType::Ratio(3, 4)))
             );
         }
-        _ => panic!("Expected vector, got {expr}"),
+        _ => panic!("Expected vector, got {result}"),
     }
-}
-
-#[test]
-fn test_vector_parse_nested_lists() {
-    let expr = parse("<< (1 2) (3 4) >>").unwrap();
-    match expr {
-        Value::Vector(vec) => {
-            assert_eq!(vec.elements.len(), 2);
-            // Each element should be a list
-            match &vec.elements[0] {
-                Value::Cons(_) => {}
-                _ => panic!("Expected cons cell"),
-            }
-        }
-        _ => panic!("Expected vector, got {expr}"),
-    }
-}
-
-#[test]
-fn test_vector_parse_symbols() {
-    let expr = parse("<< a b c >>").unwrap();
-    match expr {
-        Value::Vector(vec) => {
-            assert_eq!(vec.elements.len(), 3);
-            assert_eq!(
-                vec.elements[0],
-                Value::Atom(AtomType::Symbol(language::SymbolType::Symbol(
-                    InternedSymbol::new("a")
-                )))
-            );
-            assert_eq!(
-                vec.elements[1],
-                Value::Atom(AtomType::Symbol(language::SymbolType::Symbol(
-                    InternedSymbol::new("b")
-                )))
-            );
-            assert_eq!(
-                vec.elements[2],
-                Value::Atom(AtomType::Symbol(language::SymbolType::Symbol(
-                    InternedSymbol::new("c")
-                )))
-            );
-        }
-        _ => panic!("Expected vector, got {expr}"),
-    }
-}
-
-#[test]
-fn test_vector_parse_error_unclosed() {
-    let result = parse("<< 1 2 3");
-    assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Unclosed vector"));
-}
-
-#[test]
-fn test_vector_parse_error_unexpected_end() {
-    let result = parse(">>");
-    assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Unexpected >>"));
 }
 
 // ============================================================================
@@ -130,61 +81,42 @@ fn test_vector_parse_error_unexpected_end() {
 
 #[test]
 fn test_vector_display_empty() {
-    let vec = Value::Vector(Arc::new(VectorValue { elements: vec![] }));
-    assert_eq!(format!("{vec}"), "<<>>");
+    let result = eval_vector("(vector)");
+    assert_eq!(format!("{result}"), "<<>>");
 }
 
 #[test]
 fn test_vector_display_integers() {
-    let vec = Value::Vector(Arc::new(VectorValue {
-        elements: vec![
-            Value::Atom(AtomType::Number(NumericType::Int(1))),
-            Value::Atom(AtomType::Number(NumericType::Int(2))),
-            Value::Atom(AtomType::Number(NumericType::Int(3))),
-        ],
-    }));
-    assert_eq!(format!("{vec}"), "<<1 2 3>>");
+    let result = eval_vector("(vector 1 2 3)");
+    assert_eq!(format!("{result}"), "<<1 2 3>>");
 }
 
 #[test]
 fn test_vector_display_mixed() {
-    let vec = Value::Vector(Arc::new(VectorValue {
-        elements: vec![
-            Value::Atom(AtomType::Number(NumericType::Int(1))),
-            Value::Atom(AtomType::Number(NumericType::Float(2.5))),
-            Value::Atom(AtomType::Symbol(language::SymbolType::Symbol(
-                InternedSymbol::new("x"),
-            ))),
-        ],
-    }));
-    assert_eq!(format!("{vec}"), "<<1 2.5 x>>");
+    let result = eval_vector("(vector 1 2.5)");
+    assert_eq!(format!("{result}"), "<<1 2.5>>");
 }
 
 // ============================================================================
-// Vector Evaluation Tests
+// Vector with Expressions Tests
 // ============================================================================
 
 #[test]
-fn test_vector_self_evaluating() {
-    let mut env = Environment::new();
-    let expr = parse("<< 1 2 3 >>").unwrap();
-    let result = eval(expr.clone(), &mut env).unwrap();
-    assert_eq!(result, expr);
-}
-
-#[test]
-fn test_vector_with_expressions() {
-    let mut env = Environment::new();
-    let expr = parse("<< (+ 1 2) (* 3 4) >>").unwrap();
-
-    // The vector literal itself is self-evaluating, but if we want
-    // evaluated elements, we'd need a 'vector' constructor function
-    match eval(expr, &mut env).unwrap() {
+fn test_vector_with_evaluated_expressions() {
+    let result = eval_vector("(vector (+ 1 2) (* 3 4))");
+    match result {
         Value::Vector(vec) => {
-            // Elements are unevaluated expressions in the literal
             assert_eq!(vec.elements.len(), 2);
+            assert_eq!(
+                vec.elements[0],
+                Value::Atom(AtomType::Number(NumericType::Int(3)))
+            );
+            assert_eq!(
+                vec.elements[1],
+                Value::Atom(AtomType::Number(NumericType::Int(12)))
+            );
         }
-        _ => panic!("Expected vector"),
+        _ => panic!("Expected vector, got {result}"),
     }
 }
 
@@ -194,105 +126,83 @@ fn test_vector_with_expressions() {
 
 #[test]
 fn test_vector_length_empty() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-length << >>)").unwrap();
-    let result = eval(expr, &mut env).unwrap();
+    let result = eval_vector("(vector-length (vector))");
     assert_eq!(result, Value::Atom(AtomType::Number(NumericType::Int(0))));
 }
 
 #[test]
 fn test_vector_length_nonempty() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-length << 1 2 3 4 5 >>)").unwrap();
-    let result = eval(expr, &mut env).unwrap();
+    let result = eval_vector("(vector-length (vector 1 2 3 4 5))");
     assert_eq!(result, Value::Atom(AtomType::Number(NumericType::Int(5))));
 }
 
 #[test]
 fn test_vector_length_error_not_vector() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-length (quote (1 2 3)))").unwrap();
-    let result = eval(expr, &mut env);
+    let result = eval_vector_result("(vector-length (quote (1 2 3)))");
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("expected vector"));
 }
 
 #[test]
 fn test_vector_ref_basic() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-ref << 10 20 30 >> 0)").unwrap();
-    let result = eval(expr, &mut env).unwrap();
+    let result = eval_vector("(vector-ref (vector 10 20 30) 0)");
     assert_eq!(result, Value::Atom(AtomType::Number(NumericType::Int(10))));
 }
 
 #[test]
 fn test_vector_ref_middle() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-ref << 10 20 30 >> 1)").unwrap();
-    let result = eval(expr, &mut env).unwrap();
+    let result = eval_vector("(vector-ref (vector 10 20 30) 1)");
     assert_eq!(result, Value::Atom(AtomType::Number(NumericType::Int(20))));
 }
 
 #[test]
 fn test_vector_ref_last() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-ref << 10 20 30 >> 2)").unwrap();
-    let result = eval(expr, &mut env).unwrap();
+    let result = eval_vector("(vector-ref (vector 10 20 30) 2)");
     assert_eq!(result, Value::Atom(AtomType::Number(NumericType::Int(30))));
 }
 
 #[test]
 fn test_vector_ref_out_of_bounds_positive() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-ref << 10 20 30 >> 3)").unwrap();
-    let result = eval(expr, &mut env);
+    let result = eval_vector_result("(vector-ref (vector 10 20 30) 3)");
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("out of bounds"));
 }
 
 #[test]
 fn test_vector_ref_out_of_bounds_negative() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-ref << 10 20 30 >> -1)").unwrap();
-    let result = eval(expr, &mut env);
+    let result = eval_vector_result("(vector-ref (vector 10 20 30) -1)");
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("out of bounds"));
 }
 
 #[test]
 fn test_vector_ref_error_not_vector() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-ref (quote (1 2 3)) 0)").unwrap();
-    let result = eval(expr, &mut env);
+    let result = eval_vector_result("(vector-ref (quote (1 2 3)) 0)");
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("must be a vector"));
 }
 
 #[test]
 fn test_vector_ref_error_not_integer() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-ref << 1 2 3 >> 1.5)").unwrap();
-    let result = eval(expr, &mut env);
+    let result = eval_vector_result("(vector-ref (vector 1 2 3) 1.5)");
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("must be an integer"));
 }
 
 #[test]
 fn test_vector_ref_with_computed_index() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-ref << 10 20 30 >> (+ 1 1))").unwrap();
-    let result = eval(expr, &mut env).unwrap();
+    let result = eval_vector("(vector-ref (vector 10 20 30) (+ 1 1))");
     assert_eq!(result, Value::Atom(AtomType::Number(NumericType::Int(30))));
 }
 
 // ============================================================================
-// Vector Nested Structure Tests
+// Nested Vector Tests
 // ============================================================================
 
 #[test]
 fn test_nested_vectors() {
-    let expr = parse("<< << 1 2 >> << 3 4 >> >>").unwrap();
-    match expr {
+    let result = eval_vector("(vector (vector 1 2) (vector 3 4))");
+    match result {
         Value::Vector(outer) => {
             assert_eq!(outer.elements.len(), 2);
             match &outer.elements[0] {
@@ -308,29 +218,13 @@ fn test_nested_vectors() {
 
 #[test]
 fn test_vector_of_vectors_display() {
-    let inner1 = Value::Vector(Arc::new(VectorValue {
-        elements: vec![
-            Value::Atom(AtomType::Number(NumericType::Int(1))),
-            Value::Atom(AtomType::Number(NumericType::Int(2))),
-        ],
-    }));
-    let inner2 = Value::Vector(Arc::new(VectorValue {
-        elements: vec![
-            Value::Atom(AtomType::Number(NumericType::Int(3))),
-            Value::Atom(AtomType::Number(NumericType::Int(4))),
-        ],
-    }));
-    let outer = Value::Vector(Arc::new(VectorValue {
-        elements: vec![inner1, inner2],
-    }));
-    assert_eq!(format!("{outer}"), "<<<<1 2>> <<3 4>>>>");
+    let result = eval_vector("(vector (vector 1 2) (vector 3 4))");
+    assert_eq!(format!("{result}"), "<<<<1 2>> <<3 4>>>>");
 }
 
 #[test]
 fn test_vector_ref_nested() {
-    let mut env = Environment::new();
-    let expr = parse("(vector-ref (vector-ref << << 1 2 >> << 3 4 >> >> 1) 0)").unwrap();
-    let result = eval(expr, &mut env).unwrap();
+    let result = eval_vector("(vector-ref (vector-ref (vector (vector 1 2) (vector 3 4)) 1) 0)");
     assert_eq!(result, Value::Atom(AtomType::Number(NumericType::Int(3))));
 }
 
@@ -340,40 +234,12 @@ fn test_vector_ref_nested() {
 
 #[test]
 fn test_vector_in_list() {
-    let expr = parse("(quote (<< 1 2 3 >> x y))").unwrap();
-    let mut env = Environment::new();
-    let result = eval(expr, &mut env).unwrap();
-
+    let result = eval_vector("(quote ((vector 1 2 3) x y))");
     match result {
         Value::Cons(cell) => match &cell.car {
-            Value::Vector(_) => {}
-            _ => panic!("Expected vector as first element"),
+            Value::Cons(_) => {} // First element is the (vector ...) expression as a list
+            _ => panic!("Expected cons as first element"),
         },
         _ => panic!("Expected list"),
     }
-}
-
-#[test]
-fn test_comparison_operators_still_work() {
-    let mut env = Environment::new();
-
-    // Make sure < still works as comparison
-    let expr = parse("(< 3 5)").unwrap();
-    let result = eval(expr, &mut env).unwrap();
-    assert_eq!(result, Value::Atom(AtomType::Bool(true)));
-
-    // Make sure > still works as comparison
-    let expr = parse("(> 3 5)").unwrap();
-    let result = eval(expr, &mut env).unwrap();
-    assert_eq!(result, Value::Atom(AtomType::Bool(false)));
-}
-
-#[test]
-fn test_single_angle_bracket_as_symbol() {
-    // A single < or > should be treated as a symbol
-    let expr = parse("(< 1 2)").unwrap();
-    let mut env = Environment::new();
-    let result = eval(expr, &mut env).unwrap();
-    // This should work as the less-than comparison
-    assert_eq!(result, Value::Atom(AtomType::Bool(true)));
 }

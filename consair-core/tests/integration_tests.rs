@@ -1,7 +1,8 @@
-use consair::{Environment, eval, parse};
+use consair::{Environment, eval, parse, register_stdlib};
 
 fn eval_expr(expr: &str) -> String {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
     match parse(expr) {
         Ok(parsed) => match eval(parsed, &mut env) {
             Ok(result) => result.to_string(),
@@ -76,6 +77,7 @@ fn test_numbers() {
 fn test_label_and_recursion() {
     // Test that label defines a function
     let mut env = Environment::new();
+    register_stdlib(&mut env);
 
     // Define a simple identity function
     let define = parse("(label identity (lambda (x) x))").unwrap();
@@ -91,6 +93,7 @@ fn test_label_and_recursion() {
 fn test_closure() {
     // Test that lambdas capture their environment
     let mut env = Environment::new();
+    register_stdlib(&mut env);
 
     // Define a function that returns a closure
     let define = parse("(label make-const (lambda (x) (lambda (y) x)))").unwrap();

@@ -9,6 +9,7 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::interner::InternedSymbol;
 use crate::interpreter::Environment;
 use crate::language::{AtomType, SymbolType, Value};
 use crate::native::{extract_string, make_int, make_string, vec_to_alist};
@@ -61,9 +62,6 @@ fn print_impl(args: &[Value], newline: bool) -> Result<Value, String> {
 fn value_to_display_string(value: &Value) -> String {
     match value {
         Value::Atom(AtomType::String(crate::language::StringType::Basic(s))) => s.clone(),
-        Value::Atom(AtomType::String(crate::language::StringType::Raw { content, .. })) => {
-            content.clone()
-        }
         _ => format!("{value}"),
     }
 }
@@ -129,22 +127,30 @@ pub fn shell(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
     let exit_code = output.status.code().unwrap_or(-1) as i64;
     let success = output.status.success();
 
-    // Build association list: ((:out . "...") (:err . "...") (:exit . 0) (:success . t))
+    // Build association list: ((out . "...") (err . "...") (exit . 0) (success . t))
     let result_pairs = vec![
         (
-            Value::Atom(AtomType::Symbol(SymbolType::keyword("out"))),
+            Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(
+                "out",
+            )))),
             make_string(stdout_str),
         ),
         (
-            Value::Atom(AtomType::Symbol(SymbolType::keyword("err"))),
+            Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(
+                "err",
+            )))),
             make_string(stderr_str),
         ),
         (
-            Value::Atom(AtomType::Symbol(SymbolType::keyword("exit"))),
+            Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(
+                "exit",
+            )))),
             make_int(exit_code),
         ),
         (
-            Value::Atom(AtomType::Symbol(SymbolType::keyword("success"))),
+            Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(
+                "success",
+            )))),
             Value::Atom(AtomType::Bool(success)),
         ),
     ];

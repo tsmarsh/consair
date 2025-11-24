@@ -175,8 +175,8 @@ fn test_nested_expressions() {
 fn test_vector_expressions() {
     let result = run_lisp_file(
         r#"
-<<1 2 3>>
-<<4 5 6>>
+(vector 1 2 3)
+(vector 4 5 6)
 "#,
     );
     assert_eq!(result.unwrap(), "<<4 5 6>>");

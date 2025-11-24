@@ -1,7 +1,6 @@
 use crate::interner::InternedSymbol;
-use crate::language::{AtomType, SymbolType, Value, VectorValue, cons};
+use crate::language::{AtomType, SymbolType, Value, cons};
 use crate::lexer::{Lexer, Token};
-use std::sync::Arc;
 
 // ============================================================================
 // Parser
@@ -38,11 +37,6 @@ impl<'a> Parser<'a> {
                 self.advance()?;
                 Ok(value)
             }
-            Token::Char(c) => {
-                let value = Value::Atom(AtomType::Char(*c));
-                self.advance()?;
-                Ok(value)
-            }
             Token::Symbol(s) => {
                 let value = if s == "nil" {
                     Value::Nil
@@ -51,11 +45,6 @@ impl<'a> Parser<'a> {
                 } else {
                     Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(s))))
                 };
-                self.advance()?;
-                Ok(value)
-            }
-            Token::Keyword(k) => {
-                let value = Value::Atom(AtomType::Symbol(k.clone()));
                 self.advance()?;
                 Ok(value)
             }
@@ -99,21 +88,6 @@ impl<'a> Parser<'a> {
                     cons(unquoted, Value::Nil),
                 ))
             }
-            Token::VectorStart => {
-                self.advance()?;
-                let mut elements = Vec::new();
-
-                while !matches!(self.current_token, Token::VectorEnd | Token::Eof) {
-                    elements.push(self.parse_expression()?);
-                }
-
-                if matches!(self.current_token, Token::Eof) {
-                    return Err("Unclosed vector (missing >>)".to_string());
-                }
-
-                self.advance()?; // consume >>
-                Ok(Value::Vector(Arc::new(VectorValue { elements })))
-            }
             Token::LParen => {
                 self.advance()?;
                 let mut elements = Vec::new();
@@ -135,7 +109,6 @@ impl<'a> Parser<'a> {
                 Ok(list)
             }
             Token::RParen => Err("Unexpected )".to_string()),
-            Token::VectorEnd => Err("Unexpected >>".to_string()),
             Token::Eof => Err("Unexpected end of input".to_string()),
         }
     }

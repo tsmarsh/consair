@@ -1,5 +1,6 @@
 use consair::{
     AtomType, Environment, NumericType, Value, eval, interner::InternedSymbol, language, parse,
+    register_stdlib,
 };
 
 // ============================================================================
@@ -316,6 +317,7 @@ fn test_parse_ratio_reduces_to_int() {
 #[test]
 fn test_eval_addition() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
     let expr = parse("(+ 5 3)").unwrap();
     let result = eval(expr, &mut env).unwrap();
 
@@ -328,6 +330,7 @@ fn test_eval_addition() {
 #[test]
 fn test_eval_subtraction() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
     let expr = parse("(- 10 3)").unwrap();
     let result = eval(expr, &mut env).unwrap();
 
@@ -340,6 +343,7 @@ fn test_eval_subtraction() {
 #[test]
 fn test_eval_multiplication() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
     let expr = parse("(* 6 7)").unwrap();
     let result = eval(expr, &mut env).unwrap();
 
@@ -352,6 +356,7 @@ fn test_eval_multiplication() {
 #[test]
 fn test_eval_division_exact() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
     let expr = parse("(/ 5 2)").unwrap();
     let result = eval(expr, &mut env).unwrap();
 
@@ -368,6 +373,7 @@ fn test_eval_division_exact() {
 #[test]
 fn test_eval_division_evenly() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
     let expr = parse("(/ 10 5)").unwrap();
     let result = eval(expr, &mut env).unwrap();
 
@@ -380,8 +386,9 @@ fn test_eval_division_evenly() {
 #[test]
 fn test_eval_ratio_arithmetic() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
 
-    // 1/2 + 1/3 = 5/6
+    //1/2 + 1/3 = 5/6
     let expr = parse("(+ 1/2 1/3)").unwrap();
     let result = eval(expr, &mut env).unwrap();
 
@@ -397,6 +404,7 @@ fn test_eval_ratio_arithmetic() {
 #[test]
 fn test_eval_float_arithmetic() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
     let expr = parse("(+ 3.5 2.5)").unwrap();
     let result = eval(expr, &mut env).unwrap();
 
@@ -411,6 +419,7 @@ fn test_eval_float_arithmetic() {
 #[test]
 fn test_eval_comparison_less_than() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
 
     let expr = parse("(< 5 10)").unwrap();
     let result = eval(expr, &mut env).unwrap();
@@ -424,6 +433,7 @@ fn test_eval_comparison_less_than() {
 #[test]
 fn test_eval_comparison_greater_than() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
 
     let expr = parse("(> 10 5)").unwrap();
     let result = eval(expr, &mut env).unwrap();
@@ -437,8 +447,9 @@ fn test_eval_comparison_greater_than() {
 #[test]
 fn test_eval_comparison_equals() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
 
-    // Test int equality
+    //Test int equality
     let expr = parse("(= 5 5)").unwrap();
     let result = eval(expr, &mut env).unwrap();
     assert_eq!(result, Value::Atom(AtomType::Bool(true)));
@@ -452,8 +463,9 @@ fn test_eval_comparison_equals() {
 #[test]
 fn test_eval_nested_arithmetic() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
 
-    // (+ (* 2 3) (/ 10 5))
+    //(+ (* 2 3) (/ 10 5))
     // = (+ 6 2)
     // = 8
     let expr = parse("(+ (* 2 3) (/ 10 5))").unwrap();
@@ -468,8 +480,9 @@ fn test_eval_nested_arithmetic() {
 #[test]
 fn test_eval_overflow_in_expression() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
 
-    // This should cause overflow and promote to BigInt
+    //This should cause overflow and promote to BigInt
     let expr_str = format!("(+ {} 1)", i64::MAX);
     let expr = parse(&expr_str).unwrap();
     let result = eval(expr, &mut env).unwrap();
@@ -483,6 +496,7 @@ fn test_eval_overflow_in_expression() {
 #[test]
 fn test_ratio_in_conditional() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
 
     // (cond ((< 1/2 1) 'yes) (t 'no))
     let expr = parse("(cond ((< 1/2 1) 'yes) (t 'no))").unwrap();
@@ -499,8 +513,9 @@ fn test_ratio_in_conditional() {
 #[test]
 fn test_numeric_precision_preservation() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
 
-    // Compute 1/3 + 1/3 + 1/3 - should equal 1 exactly (not 0.99999...)
+    //Compute 1/3 + 1/3 + 1/3 - should equal 1 exactly (not 0.99999...)
     let expr = parse("(+ 1/3 (+ 1/3 1/3))").unwrap();
     let result = eval(expr, &mut env).unwrap();
 
@@ -517,6 +532,7 @@ fn test_numeric_precision_preservation() {
 #[test]
 fn test_error_division_by_zero() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
     let expr = parse("(/ 5 0)").unwrap();
     let result = eval(expr, &mut env);
 
@@ -526,6 +542,7 @@ fn test_error_division_by_zero() {
 #[test]
 fn test_error_arithmetic_on_non_number() {
     let mut env = Environment::new();
+    register_stdlib(&mut env);
     let expr = parse("(+ 5 'symbol)").unwrap();
     let result = eval(expr, &mut env);
 

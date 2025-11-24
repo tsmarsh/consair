@@ -15,7 +15,6 @@ use crate::numeric::NumericType;
 pub fn extract_string(value: &Value) -> Result<String, String> {
     match value {
         Value::Atom(AtomType::String(StringType::Basic(s))) => Ok(s.clone()),
-        Value::Atom(AtomType::String(StringType::Raw { content, .. })) => Ok(content.clone()),
         _ => Err(format!("Expected string, got {value}")),
     }
 }
@@ -49,9 +48,8 @@ pub fn extract_bool(value: &Value) -> Result<bool, String> {
 /// Extract bytes from a Value
 pub fn extract_bytes(value: &Value) -> Result<Vec<u8>, String> {
     match value {
-        Value::Atom(AtomType::String(StringType::Bytes(bytes))) => Ok(bytes.clone()),
         Value::Atom(AtomType::String(StringType::Basic(s))) => Ok(s.as_bytes().to_vec()),
-        _ => Err(format!("Expected bytes or string, got {value}")),
+        _ => Err(format!("Expected string, got {value}")),
     }
 }
 
@@ -204,11 +202,6 @@ pub fn make_bool(b: bool) -> Value {
     Value::Atom(AtomType::Bool(b))
 }
 
-/// Create a keyword Value
-pub fn make_keyword(name: impl Into<String>) -> Value {
-    Value::Atom(AtomType::Symbol(SymbolType::keyword(name)))
-}
-
 /// Create a symbol Value
 pub fn make_symbol(name: impl Into<String>) -> Value {
     Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(
@@ -216,9 +209,11 @@ pub fn make_symbol(name: impl Into<String>) -> Value {
     ))))
 }
 
-/// Create a bytes Value
+/// Create a bytes Value (represented as a string)
 pub fn make_bytes(bytes: Vec<u8>) -> Value {
-    Value::Atom(AtomType::String(StringType::Bytes(bytes)))
+    // Convert bytes to a string (lossy conversion)
+    let s = String::from_utf8_lossy(&bytes).to_string();
+    Value::Atom(AtomType::String(StringType::Basic(s)))
 }
 
 // ============================================================================

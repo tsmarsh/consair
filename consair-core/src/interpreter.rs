@@ -107,19 +107,15 @@ fn eval_loop(mut expr: Value, env: &mut Environment, depth: usize) -> Result<Val
             Value::Atom(AtomType::Number(_))
             | Value::Atom(AtomType::Bool(_))
             | Value::Atom(AtomType::String(_))
-            | Value::Atom(AtomType::Char(_))
             | Value::Nil => return Ok(expr),
 
             // Symbol lookup
-            Value::Atom(AtomType::Symbol(ref sym)) => {
-                return match sym {
-                    SymbolType::Symbol(name) => name.with_str(|s| {
-                        current_env
-                            .lookup(s)
-                            .ok_or_else(|| format!("Unbound symbol: {name}"))
-                    }),
-                    SymbolType::Keyword { .. } => Ok(expr),
-                };
+            Value::Atom(AtomType::Symbol(SymbolType::Symbol(ref name))) => {
+                return name.with_str(|s| {
+                    current_env
+                        .lookup(s)
+                        .ok_or_else(|| format!("Unbound symbol: {name}"))
+                });
             }
 
             // Self-evaluating forms
@@ -503,4 +499,3 @@ fn expand_macros(expr: Value, env: &mut Environment, depth: usize) -> Result<Val
 
     Ok(result)
 }
-
