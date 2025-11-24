@@ -440,7 +440,23 @@ nil
             <h3>Getting Started</h3>
             <div class="install-steps">
                 <div class="step">
-                    <h4>📦 Download Pre-built Binary</h4>
+                    <h4>🍺 Homebrew (macOS/Linux)</h4>
+                    <pre><code>brew tap tsmarsh/consair
+brew install consair</code></pre>
+                </div>
+
+                <div class="step">
+                    <h4>📦 APT (Debian/Ubuntu)</h4>
+                    <pre><code># Add the repository
+echo "deb [trusted=yes] https://tsmarsh.github.io/apt-consair stable main" | sudo tee /etc/apt/sources.list.d/consair.list
+
+# Update and install
+sudo apt update
+sudo apt install consair</code></pre>
+                </div>
+
+                <div class="step">
+                    <h4>💾 Download Pre-built Binary</h4>
                     <p>Get the latest release for your platform from the <a href="https://github.com/tsmarsh/consair/releases" style="color: var(--accent);">releases page</a>:</p>
                     <pre><code>chmod +x cons-*
 ./cons-*</code></pre>
