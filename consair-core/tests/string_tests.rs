@@ -1,6 +1,5 @@
 use consair::*;
-use interner::InternedSymbol;
-use language::{AtomType, StringType, SymbolType};
+use language::{AtomType, StringType};
 
 #[test]
 fn test_basic_string() {
