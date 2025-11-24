@@ -6,7 +6,7 @@ use std::time::Instant;
 fn bench_define_operations(n: usize) -> std::time::Duration {
     let start = Instant::now();
 
-    let mut env = Environment::new();
+    let env = Environment::new();
 
     for i in 0..n {
         env.define(

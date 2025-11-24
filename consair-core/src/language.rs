@@ -201,6 +201,31 @@ impl PartialEq for LambdaCell {
     }
 }
 
+#[derive(Clone)]
+pub struct MacroCell {
+    pub params: Vec<InternedSymbol>,
+    pub body: Value,
+    pub env: Environment,
+}
+
+// Manual implementations since Environment uses RwLock (doesn't impl Debug/PartialEq)
+impl std::fmt::Debug for MacroCell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MacroCell")
+            .field("params", &self.params)
+            .field("body", &self.body)
+            .field("env", &"<environment>")
+            .finish()
+    }
+}
+
+impl PartialEq for MacroCell {
+    fn eq(&self, other: &Self) -> bool {
+        // Compare only params and body, not environment
+        self.params == other.params && self.body == other.body
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct VectorValue {
     pub elements: Vec<Value>,
@@ -215,6 +240,7 @@ pub enum Value {
     Cons(Arc<ConsCell>),
     Nil,
     Lambda(Arc<LambdaCell>),
+    Macro(Arc<MacroCell>),
     Vector(Arc<VectorValue>),
     NativeFn(NativeFn),
 }
@@ -227,6 +253,7 @@ impl PartialEq for Value {
             (Value::Cons(a), Value::Cons(b)) => a == b,
             (Value::Nil, Value::Nil) => true,
             (Value::Lambda(a), Value::Lambda(b)) => a == b,
+            (Value::Macro(a), Value::Macro(b)) => a == b,
             (Value::Vector(a), Value::Vector(b)) => a == b,
             (Value::NativeFn(a), Value::NativeFn(b)) => {
                 // Compare function pointers
@@ -359,6 +386,7 @@ impl fmt::Display for Value {
                 write!(f, ")")
             }
             Value::Lambda(_) => write!(f, "<lambda>"),
+            Value::Macro(_) => write!(f, "<macro>"),
             Value::Vector(vec) => {
                 write!(f, "<<")?;
                 for (i, elem) in vec.elements.iter().enumerate() {

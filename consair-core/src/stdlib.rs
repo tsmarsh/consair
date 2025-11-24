@@ -172,6 +172,95 @@ pub fn now(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
 }
 
 // ============================================================================
+// Macro Support
+// ============================================================================
+
+/// Global counter for gensym
+static GENSYM_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Generate a unique symbol (for macro hygiene)
+/// Usage: (gensym) => g__123
+/// Usage: (gensym "prefix") => prefix__123
+pub fn gensym(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    let prefix = if args.is_empty() {
+        "g".to_string()
+    } else if args.len() == 1 {
+        extract_string(&args[0])?
+    } else {
+        return Err("gensym: expected 0 or 1 arguments".to_string());
+    };
+
+    let counter = GENSYM_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let symbol = format!("{prefix}__{counter}");
+
+    Ok(Value::Atom(AtomType::Symbol(SymbolType::Symbol(
+        crate::interner::InternedSymbol::new(&symbol),
+    ))))
+}
+
+/// Expand a macro call once
+/// Usage: (macroexpand-1 '(when condition body)) => (cond (condition body))
+pub fn macroexpand_1(args: &[Value], env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("macroexpand-1: expected 1 argument".to_string());
+    }
+
+    let expr = args[0].clone();
+
+    // Use the internal expand_macro_once function
+    if let Value::Cons(cell) = &expr
+        && let Value::Atom(AtomType::Symbol(SymbolType::Symbol(name))) = &cell.car
+        && let Some(Value::Macro(macro_cell)) = env.lookup(&name.resolve())
+    {
+        // Collect unevaluated arguments
+        let mut macro_args = Vec::new();
+        let mut current = cell.cdr.clone();
+        while let Value::Cons(ref arg_cell) = current {
+            macro_args.push(arg_cell.car.clone());
+            current = arg_cell.cdr.clone();
+        }
+
+        // Check argument count
+        if macro_args.len() != macro_cell.params.len() {
+            return Err(format!(
+                "macro: expected {} arguments, got {}",
+                macro_cell.params.len(),
+                macro_args.len()
+            ));
+        }
+
+        // Create environment for macro expansion
+        let mut macro_env = macro_cell.env.extend(&macro_cell.params, &macro_args);
+
+        // Evaluate macro body to get expanded code
+        return crate::interpreter::eval(macro_cell.body.clone(), &mut macro_env);
+    }
+
+    // Not a macro call, return unchanged
+    Ok(expr)
+}
+
+/// Fully expand all macros in an expression
+/// Usage: (macroexpand '(when condition body)) => fully expanded form
+pub fn macroexpand(args: &[Value], env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("macroexpand: expected 1 argument".to_string());
+    }
+
+    let mut expr = args[0].clone();
+    let mut expanded = true;
+
+    // Keep expanding until no more macros
+    while expanded {
+        let new_expr = macroexpand_1(&[expr.clone()], env)?;
+        expanded = new_expr != expr;
+        expr = new_expr;
+    }
+
+    Ok(expr)
+}
+
+// ============================================================================
 // Registration
 // ============================================================================
 
@@ -190,4 +279,9 @@ pub fn register_stdlib(env: &mut Environment) {
 
     // Time
     env.define("now".to_string(), Value::NativeFn(now));
+
+    // Macro support
+    env.define("gensym".to_string(), Value::NativeFn(gensym));
+    env.define("macroexpand-1".to_string(), Value::NativeFn(macroexpand_1));
+    env.define("macroexpand".to_string(), Value::NativeFn(macroexpand));
 }

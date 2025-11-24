@@ -750,6 +750,20 @@ impl Lexer {
                 self.advance();
                 Ok(Token::Quote)
             }
+            '`' => {
+                self.advance();
+                Ok(Token::Quasiquote)
+            }
+            ',' => {
+                if self.peek_ahead(1) == '@' {
+                    self.advance();
+                    self.advance();
+                    Ok(Token::UnquoteSplicing)
+                } else {
+                    self.advance();
+                    Ok(Token::Unquote)
+                }
+            }
             '<' => {
                 if self.peek_ahead(1) == '<' {
                     self.advance();
@@ -802,6 +816,9 @@ pub enum Token {
     LParen,
     RParen,
     Quote,
+    Quasiquote,
+    Unquote,
+    UnquoteSplicing,
     VectorStart,
     VectorEnd,
     Symbol(String),

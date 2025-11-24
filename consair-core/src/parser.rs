@@ -69,6 +69,36 @@ impl<'a> Parser<'a> {
                     cons(quoted, Value::Nil),
                 ))
             }
+            Token::Quasiquote => {
+                self.advance()?;
+                let quoted = self.parse_expression()?;
+                Ok(cons(
+                    Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(
+                        "quasiquote",
+                    )))),
+                    cons(quoted, Value::Nil),
+                ))
+            }
+            Token::Unquote => {
+                self.advance()?;
+                let unquoted = self.parse_expression()?;
+                Ok(cons(
+                    Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(
+                        "unquote",
+                    )))),
+                    cons(unquoted, Value::Nil),
+                ))
+            }
+            Token::UnquoteSplicing => {
+                self.advance()?;
+                let unquoted = self.parse_expression()?;
+                Ok(cons(
+                    Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(
+                        "unquote-splicing",
+                    )))),
+                    cons(unquoted, Value::Nil),
+                ))
+            }
             Token::VectorStart => {
                 self.advance()?;
                 let mut elements = Vec::new();

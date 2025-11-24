@@ -26,10 +26,39 @@ This implementation demonstrates how Rust's ownership system and `Rc` (reference
 6. **cons** - Constructs a new list by prepending an element
 7. **cond** - Conditional expression
 
-### Two Special Forms
+### Special Forms
 
 - **lambda** - Creates anonymous functions with closures
 - **label** - Names functions (enables recursion)
+- **defmacro** - Defines macros for code transformation
+- **quasiquote** - Template construction with `` ` `` syntax
+- **unquote** - Evaluate expressions in templates with `,` syntax
+- **unquote-splicing** - Splice lists in templates with `,@` syntax
+
+### Macro System
+
+Consair supports **unhygienic macros** in the Common Lisp style, enabling powerful meta-programming:
+
+```lisp
+; Define a when macro
+(defmacro when (condition body)
+  `(cond (,condition ,body) (t nil)))
+
+; Use the macro
+(when t (println "This runs!"))  ; => "This runs!"
+(when nil (println "This doesn't"))  ; => nil
+
+; Macros expand before evaluation
+(macroexpand '(when t 42))  ; => (cond (t 42) (t nil))
+```
+
+**Macro Features:**
+- **`defmacro`** - Define macros that receive unevaluated arguments
+- **`` ` `` (quasiquote)** - Construct code templates
+- **`,` (unquote)** - Insert evaluated expressions into templates
+- **`,@` (unquote-splicing)** - Splice lists into templates
+- **`macroexpand`** / **`macroexpand-1`** - Debug macro expansion
+- **`gensym`** - Generate unique symbols for hygiene
 
 ### Standard Library
 
@@ -41,6 +70,11 @@ This implementation demonstrates how Rust's ownership system and `Rc` (reference
 - **shell** - Execute shell commands, returns `((:out . "...") (:err . "...") (:exit . 0) (:success . t))`
 - **now** - Get current Unix timestamp
 
+**Macro Utilities:**
+- **gensym** - Generate unique symbols for macro hygiene
+- **macroexpand** - Fully expand macros in an expression
+- **macroexpand-1** - Expand macros one level
+
 ## Memory Model
 
 ```rust
@@ -51,6 +85,7 @@ enum Value {
     Cons(Arc<ConsCell>),      // thread-safe shared ownership of cons cells
     Nil,                      // empty list
     Lambda(Arc<LambdaCell>),  // functions with captured environments
+    Macro(Arc<MacroCell>),    // macros for code transformation
 }
 ```
 

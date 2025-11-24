@@ -605,6 +605,143 @@ fn bench_eval_nested_lambda(c: &mut Criterion) {
 }
 
 // ============================================================================
+// Macro System Benchmarks
+// ============================================================================
+
+fn bench_macro_quasiquote_simple(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    c.bench_function("macro quasiquote simple", |b| {
+        b.iter(|| {
+            let expr = parse("`(a b c)").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_macro_quasiquote_unquote(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    c.bench_function("macro quasiquote with unquote", |b| {
+        b.iter(|| {
+            let expr = parse("`(a ,(+ 1 2) c)").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_macro_quasiquote_splice(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    c.bench_function("macro quasiquote with splice", |b| {
+        b.iter(|| {
+            let expr = parse("`(a ,@(cons 1 (cons 2 nil)) b)").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_macro_defmacro(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    c.bench_function("macro defmacro definition", |b| {
+        b.iter(|| {
+            let expr = parse("(defmacro when (condition body) `(cond (,condition ,body) (t nil)))")
+                .unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_macro_expansion_simple(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    // Define the macro once
+    let setup =
+        parse("(defmacro when (condition body) `(cond (,condition ,body) (t nil)))").unwrap();
+    eval(setup, &mut env).unwrap();
+
+    c.bench_function("macro expansion simple", |b| {
+        b.iter(|| {
+            let expr = parse("(when t 42)").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_macro_expansion_nested(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    // Define when macro
+    let setup1 =
+        parse("(defmacro when (condition body) `(cond (,condition ,body) (t nil)))").unwrap();
+    eval(setup1, &mut env).unwrap();
+
+    // Define unless macro
+    let setup2 =
+        parse("(defmacro unless (condition body) `(cond (,condition nil) (t ,body)))").unwrap();
+    eval(setup2, &mut env).unwrap();
+
+    c.bench_function("macro expansion nested", |b| {
+        b.iter(|| {
+            let expr = parse("(when t (unless nil 100))").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_macro_macroexpand_1(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    let setup =
+        parse("(defmacro when (condition body) `(cond (,condition ,body) (t nil)))").unwrap();
+    eval(setup, &mut env).unwrap();
+
+    c.bench_function("macro macroexpand-1", |b| {
+        b.iter(|| {
+            let expr = parse("(macroexpand-1 '(when t 42))").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_macro_gensym(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    c.bench_function("macro gensym", |b| {
+        b.iter(|| {
+            let expr = parse("(gensym)").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+fn bench_macro_complex_template(c: &mut Criterion) {
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    // Define a more complex macro like let
+    let setup =
+        parse("(defmacro simple-let (var val body) `((lambda (,var) ,body) ,val))").unwrap();
+    eval(setup, &mut env).unwrap();
+
+    c.bench_function("macro complex template expansion", |b| {
+        b.iter(|| {
+            let expr = parse("(simple-let x 10 (+ x 20))").unwrap();
+            black_box(eval(expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+// ============================================================================
 // Criterion Configuration and Main
 // ============================================================================
 
@@ -695,11 +832,29 @@ criterion_group! {
         bench_mutual_recursion
 }
 
+criterion_group! {
+    name = macro_benches;
+    config = Criterion::default()
+        .sample_size(100)
+        .measurement_time(Duration::from_secs(10));
+    targets =
+        bench_macro_quasiquote_simple,
+        bench_macro_quasiquote_unquote,
+        bench_macro_quasiquote_splice,
+        bench_macro_defmacro,
+        bench_macro_expansion_simple,
+        bench_macro_expansion_nested,
+        bench_macro_macroexpand_1,
+        bench_macro_gensym,
+        bench_macro_complex_template
+}
+
 criterion_main!(
     parsing_benches,
     eval_benches,
     numeric_benches,
     list_benches,
     string_benches,
-    recursive_benches
+    recursive_benches,
+    macro_benches
 );
