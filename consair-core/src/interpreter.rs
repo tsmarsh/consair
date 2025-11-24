@@ -2,9 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use crate::interner::InternedSymbol;
-use crate::language::{
-    AtomType, LambdaCell, MacroCell, SymbolType, Value, car, cdr, cons, eq, is_atom,
-};
+use crate::language::{AtomType, LambdaCell, MacroCell, SymbolType, Value, car, cdr, cons};
 use crate::numeric::NumericType;
 
 // ============================================================================
@@ -194,43 +192,6 @@ fn eval_loop(mut expr: Value, env: &mut Environment, depth: usize) -> Result<Val
                                 env.define(name.resolve(), macro_val.clone());
                                 return Ok(macro_val);
                             }
-                            "atom" => {
-                                let arg = car(&cell.cdr)?;
-                                let val = eval_loop(arg, &mut current_env, depth + 1)?;
-                                return Ok(Value::Atom(AtomType::Bool(is_atom(&val))));
-                            }
-                            "eq" => {
-                                let args = cell.cdr.clone();
-                                let arg1 = car(&args)?;
-                                let rest = cdr(&args)?;
-                                let arg2 = car(&rest)?;
-
-                                let val1 = eval_loop(arg1, &mut current_env, depth + 1)?;
-                                let val2 = eval_loop(arg2, &mut current_env, depth + 1)?;
-
-                                return Ok(Value::Atom(AtomType::Bool(eq(&val1, &val2))));
-                            }
-                            "car" => {
-                                let arg = car(&cell.cdr)?;
-                                let val = eval_loop(arg, &mut current_env, depth + 1)?;
-                                return car(&val);
-                            }
-                            "cdr" => {
-                                let arg = car(&cell.cdr)?;
-                                let val = eval_loop(arg, &mut current_env, depth + 1)?;
-                                return cdr(&val);
-                            }
-                            "cons" => {
-                                let args = cell.cdr.clone();
-                                let arg1 = car(&args)?;
-                                let rest = cdr(&args)?;
-                                let arg2 = car(&rest)?;
-
-                                let val1 = eval_loop(arg1, &mut current_env, depth + 1)?;
-                                let val2 = eval_loop(arg2, &mut current_env, depth + 1)?;
-
-                                return Ok(cons(val1, val2));
-                            }
                             "cond" => {
                                 // TAIL POSITION: cond result expressions are in tail position
                                 let mut clauses = cell.cdr.clone();
@@ -296,89 +257,6 @@ fn eval_loop(mut expr: Value, env: &mut Environment, depth: usize) -> Result<Val
                                         "label: first argument must be a symbol".to_string()
                                     );
                                 }
-                            }
-                            // Arithmetic operations (NOT tail position)
-                            "+" => {
-                                return eval_arithmetic(
-                                    "+",
-                                    &cell.cdr,
-                                    &mut current_env,
-                                    depth,
-                                    |a, b| a.add(b),
-                                );
-                            }
-                            "-" => {
-                                return eval_arithmetic(
-                                    "-",
-                                    &cell.cdr,
-                                    &mut current_env,
-                                    depth,
-                                    |a, b| a.sub(b),
-                                );
-                            }
-                            "*" => {
-                                return eval_arithmetic(
-                                    "*",
-                                    &cell.cdr,
-                                    &mut current_env,
-                                    depth,
-                                    |a, b| a.mul(b),
-                                );
-                            }
-                            "/" => {
-                                return eval_arithmetic(
-                                    "/",
-                                    &cell.cdr,
-                                    &mut current_env,
-                                    depth,
-                                    |a, b| a.div(b),
-                                );
-                            }
-                            // Comparison operations (NOT tail position)
-                            "<" => {
-                                return eval_comparison(
-                                    "<",
-                                    &cell.cdr,
-                                    &mut current_env,
-                                    depth,
-                                    |a, b| a < b,
-                                );
-                            }
-                            ">" => {
-                                return eval_comparison(
-                                    ">",
-                                    &cell.cdr,
-                                    &mut current_env,
-                                    depth,
-                                    |a, b| a > b,
-                                );
-                            }
-                            "<=" => {
-                                return eval_comparison(
-                                    "<=",
-                                    &cell.cdr,
-                                    &mut current_env,
-                                    depth,
-                                    |a, b| a <= b,
-                                );
-                            }
-                            ">=" => {
-                                return eval_comparison(
-                                    ">=",
-                                    &cell.cdr,
-                                    &mut current_env,
-                                    depth,
-                                    |a, b| a >= b,
-                                );
-                            }
-                            "=" => {
-                                return eval_comparison(
-                                    "=",
-                                    &cell.cdr,
-                                    &mut current_env,
-                                    depth,
-                                    |a, b| a == b,
-                                );
                             }
                             // Vector operations (NOT tail position)
                             "vector-length" => {
@@ -626,72 +504,3 @@ fn expand_macros(expr: Value, env: &mut Environment, depth: usize) -> Result<Val
     Ok(result)
 }
 
-// ============================================================================
-// Helper Functions for Arithmetic and Comparison
-// ============================================================================
-
-fn eval_arithmetic<F>(
-    op_name: &str,
-    args: &Value,
-    env: &mut Environment,
-    depth: usize,
-    op: F,
-) -> Result<Value, String>
-where
-    F: Fn(&NumericType, &NumericType) -> Result<NumericType, String>,
-{
-    let arg1 = car(args)?;
-    let rest = cdr(args)?;
-    let arg2 = car(&rest)?;
-
-    let val1 = eval_loop(arg1, env, depth + 1)?;
-    let val2 = eval_loop(arg2, env, depth + 1)?;
-
-    // Extract numeric values
-    let num1 = match val1 {
-        Value::Atom(AtomType::Number(n)) => n,
-        _ => return Err(format!("{op_name}: expected number, got {val1}")),
-    };
-
-    let num2 = match val2 {
-        Value::Atom(AtomType::Number(n)) => n,
-        _ => return Err(format!("{op_name}: expected number, got {val2}")),
-    };
-
-    // Perform operation
-    let result = op(&num1, &num2)?;
-    Ok(Value::Atom(AtomType::Number(result)))
-}
-
-fn eval_comparison<F>(
-    op_name: &str,
-    args: &Value,
-    env: &mut Environment,
-    depth: usize,
-    op: F,
-) -> Result<Value, String>
-where
-    F: Fn(&NumericType, &NumericType) -> bool,
-{
-    let arg1 = car(args)?;
-    let rest = cdr(args)?;
-    let arg2 = car(&rest)?;
-
-    let val1 = eval_loop(arg1, env, depth + 1)?;
-    let val2 = eval_loop(arg2, env, depth + 1)?;
-
-    // Extract numeric values
-    let num1 = match val1 {
-        Value::Atom(AtomType::Number(n)) => n,
-        _ => return Err(format!("{op_name}: expected number, got {val1}")),
-    };
-
-    let num2 = match val2 {
-        Value::Atom(AtomType::Number(n)) => n,
-        _ => return Err(format!("{op_name}: expected number, got {val2}")),
-    };
-
-    // Perform comparison
-    let result = op(&num1, &num2);
-    Ok(Value::Atom(AtomType::Bool(result)))
-}

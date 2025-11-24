@@ -6,6 +6,7 @@
 use std::fs;
 use std::io::{self, Write};
 use std::process::Command;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::interpreter::Environment;
@@ -261,6 +262,264 @@ pub fn macroexpand(args: &[Value], env: &mut Environment) -> Result<Value, Strin
 }
 
 // ============================================================================
+// Core List Operations (de-sugared from special forms)
+// ============================================================================
+
+/// Test if value is an atom
+pub fn atom(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("atom: expected 1 argument".to_string());
+    }
+    let is_atom = matches!(args[0], Value::Atom(_) | Value::Nil);
+    Ok(Value::Atom(AtomType::Bool(is_atom)))
+}
+
+/// Test equality of two atoms
+pub fn eq(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("eq: expected 2 arguments".to_string());
+    }
+    let result = match (&args[0], &args[1]) {
+        (Value::Atom(a1), Value::Atom(a2)) => a1 == a2,
+        (Value::Nil, Value::Nil) => true,
+        _ => false,
+    };
+    Ok(Value::Atom(AtomType::Bool(result)))
+}
+
+/// Get first element of a list
+pub fn car(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("car: expected 1 argument".to_string());
+    }
+    match &args[0] {
+        Value::Cons(cell) => Ok(cell.car.clone()),
+        _ => Err(format!("car: expected cons cell, got {}", args[0])),
+    }
+}
+
+/// Get rest of a list
+pub fn cdr(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("cdr: expected 1 argument".to_string());
+    }
+    match &args[0] {
+        Value::Cons(cell) => Ok(cell.cdr.clone()),
+        _ => Err(format!("cdr: expected cons cell, got {}", args[0])),
+    }
+}
+
+/// Construct a cons cell
+pub fn cons_fn(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("cons: expected 2 arguments".to_string());
+    }
+    Ok(crate::language::cons(args[0].clone(), args[1].clone()))
+}
+
+// ============================================================================
+// Arithmetic Operations (de-sugared from special forms)
+// ============================================================================
+
+/// Addition
+pub fn add(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() < 2 {
+        return Err("+: expected at least 2 arguments".to_string());
+    }
+
+    let mut result = match &args[0] {
+        Value::Atom(AtomType::Number(n)) => n.clone(),
+        _ => return Err(format!("+: expected number, got {}", args[0])),
+    };
+
+    for arg in &args[1..] {
+        let num = match arg {
+            Value::Atom(AtomType::Number(n)) => n,
+            _ => return Err(format!("+: expected number, got {}", arg)),
+        };
+        result = result.add(num)?;
+    }
+
+    Ok(Value::Atom(AtomType::Number(result)))
+}
+
+/// Subtraction (variadic: subtracts successive arguments from first)
+pub fn sub(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() < 2 {
+        return Err("-: expected at least 2 arguments".to_string());
+    }
+
+    let mut result = match &args[0] {
+        Value::Atom(AtomType::Number(n)) => n.clone(),
+        _ => return Err(format!("-: expected number, got {}", args[0])),
+    };
+
+    for arg in &args[1..] {
+        let num = match arg {
+            Value::Atom(AtomType::Number(n)) => n,
+            _ => return Err(format!("-: expected number, got {}", arg)),
+        };
+        result = result.sub(num)?;
+    }
+
+    Ok(Value::Atom(AtomType::Number(result)))
+}
+
+/// Multiplication
+pub fn mul(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() < 2 {
+        return Err("*: expected at least 2 arguments".to_string());
+    }
+
+    let mut result = match &args[0] {
+        Value::Atom(AtomType::Number(n)) => n.clone(),
+        _ => return Err(format!("*: expected number, got {}", args[0])),
+    };
+
+    for arg in &args[1..] {
+        let num = match arg {
+            Value::Atom(AtomType::Number(n)) => n,
+            _ => return Err(format!("*: expected number, got {}", arg)),
+        };
+        result = result.mul(num)?;
+    }
+
+    Ok(Value::Atom(AtomType::Number(result)))
+}
+
+/// Division (variadic: divides first by successive arguments)
+pub fn div(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() < 2 {
+        return Err("/: expected at least 2 arguments".to_string());
+    }
+
+    let mut result = match &args[0] {
+        Value::Atom(AtomType::Number(n)) => n.clone(),
+        _ => return Err(format!("/: expected number, got {}", args[0])),
+    };
+
+    for arg in &args[1..] {
+        let num = match arg {
+            Value::Atom(AtomType::Number(n)) => n,
+            _ => return Err(format!("/: expected number, got {}", arg)),
+        };
+        result = result.div(num)?;
+    }
+
+    Ok(Value::Atom(AtomType::Number(result)))
+}
+
+// ============================================================================
+// Comparison Operations (de-sugared from special forms)
+// ============================================================================
+
+/// Less than
+pub fn lt(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("<: expected 2 arguments".to_string());
+    }
+
+    let num1 = match &args[0] {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!("<: expected number, got {}", args[0])),
+    };
+
+    let num2 = match &args[1] {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!("<: expected number, got {}", args[1])),
+    };
+
+    Ok(Value::Atom(AtomType::Bool(num1 < num2)))
+}
+
+/// Greater than
+pub fn gt(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err(">: expected 2 arguments".to_string());
+    }
+
+    let num1 = match &args[0] {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!(">: expected number, got {}", args[0])),
+    };
+
+    let num2 = match &args[1] {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!(">: expected number, got {}", args[1])),
+    };
+
+    Ok(Value::Atom(AtomType::Bool(num1 > num2)))
+}
+
+/// Less than or equal
+pub fn lte(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("<=: expected 2 arguments".to_string());
+    }
+
+    let num1 = match &args[0] {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!("<=: expected number, got {}", args[0])),
+    };
+
+    let num2 = match &args[1] {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!("<=: expected number, got {}", args[1])),
+    };
+
+    Ok(Value::Atom(AtomType::Bool(num1 <= num2)))
+}
+
+/// Greater than or equal
+pub fn gte(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err(">=: expected 2 arguments".to_string());
+    }
+
+    let num1 = match &args[0] {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!(">=: expected number, got {}", args[0])),
+    };
+
+    let num2 = match &args[1] {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!(">=: expected number, got {}", args[1])),
+    };
+
+    Ok(Value::Atom(AtomType::Bool(num1 >= num2)))
+}
+
+/// Numeric equality
+pub fn num_eq(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("=: expected 2 arguments".to_string());
+    }
+
+    let num1 = match &args[0] {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!("=: expected number, got {}", args[0])),
+    };
+
+    let num2 = match &args[1] {
+        Value::Atom(AtomType::Number(n)) => n,
+        _ => return Err(format!("=: expected number, got {}", args[1])),
+    };
+
+    Ok(Value::Atom(AtomType::Bool(num1 == num2)))
+}
+
+// ============================================================================
+// Vector Constructor (de-sugared from << >> syntax)
+// ============================================================================
+
+/// Construct a vector from arguments
+pub fn vector(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    Ok(Value::Vector(Arc::new(crate::language::VectorValue {
+        elements: args.to_vec(),
+    })))
+}
+
+// ============================================================================
 // Registration
 // ============================================================================
 
@@ -284,4 +543,27 @@ pub fn register_stdlib(env: &mut Environment) {
     env.define("gensym".to_string(), Value::NativeFn(gensym));
     env.define("macroexpand-1".to_string(), Value::NativeFn(macroexpand_1));
     env.define("macroexpand".to_string(), Value::NativeFn(macroexpand));
+
+    // List operations (de-sugaring special forms)
+    env.define("atom".to_string(), Value::NativeFn(atom));
+    env.define("eq".to_string(), Value::NativeFn(eq));
+    env.define("car".to_string(), Value::NativeFn(car));
+    env.define("cdr".to_string(), Value::NativeFn(cdr));
+    env.define("cons".to_string(), Value::NativeFn(cons_fn));
+
+    // Arithmetic operations (de-sugaring special forms)
+    env.define("+".to_string(), Value::NativeFn(add));
+    env.define("-".to_string(), Value::NativeFn(sub));
+    env.define("*".to_string(), Value::NativeFn(mul));
+    env.define("/".to_string(), Value::NativeFn(div));
+
+    // Comparison operations (de-sugaring special forms)
+    env.define("<".to_string(), Value::NativeFn(lt));
+    env.define(">".to_string(), Value::NativeFn(gt));
+    env.define("<=".to_string(), Value::NativeFn(lte));
+    env.define(">=".to_string(), Value::NativeFn(gte));
+    env.define("=".to_string(), Value::NativeFn(num_eq));
+
+    // Vector constructor (de-sugaring vector syntax)
+    env.define("vector".to_string(), Value::NativeFn(vector));
 }
