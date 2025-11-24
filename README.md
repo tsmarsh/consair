@@ -100,6 +100,28 @@ enum Value {
 
 ## Installation
 
+### Package Managers
+
+#### Homebrew (macOS/Linux)
+
+```bash
+brew tap tsmarsh/consair
+brew install consair
+```
+
+#### APT (Debian/Ubuntu)
+
+```bash
+# Add the repository
+echo "deb [trusted=yes] https://tsmarsh.github.io/apt-consair stable main" | sudo tee /etc/apt/sources.list.d/consair.list
+
+# Update package list
+sudo apt update
+
+# Install consair
+sudo apt install consair
+```
+
 ### Download Pre-built Binaries
 
 Download the latest release for your platform from the [Releases](../../releases) page:
