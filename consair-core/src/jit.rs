@@ -487,6 +487,40 @@ impl JitEngine {
                 "not" => {
                     self.compile_unary_op(codegen, args, codegen.rt_not, env, lambdas, compiled_fns)
                 }
+                // Standard library functions
+                "now" => self.compile_nullary_op(codegen, args, codegen.rt_now),
+                "length" => self.compile_unary_op(
+                    codegen,
+                    args,
+                    codegen.rt_length,
+                    env,
+                    lambdas,
+                    compiled_fns,
+                ),
+                "append" => self.compile_binary_op(
+                    codegen,
+                    args,
+                    codegen.rt_append,
+                    env,
+                    lambdas,
+                    compiled_fns,
+                ),
+                "reverse" => self.compile_unary_op(
+                    codegen,
+                    args,
+                    codegen.rt_reverse,
+                    env,
+                    lambdas,
+                    compiled_fns,
+                ),
+                "nth" => self.compile_binary_op(
+                    codegen,
+                    args,
+                    codegen.rt_nth,
+                    env,
+                    lambdas,
+                    compiled_fns,
+                ),
                 _ => {
                     // Check if it's a compiled function call (recursive call)
                     if let Some(func) = compiled_fns.get(sym) {
@@ -1649,6 +1683,31 @@ impl JitEngine {
         }
     }
 
+    /// Compile a nullary operation (like now).
+    fn compile_nullary_op<'ctx>(
+        &self,
+        codegen: &Codegen<'ctx>,
+        args: &Value,
+        func: inkwell::values::FunctionValue<'ctx>,
+    ) -> Result<inkwell::values::StructValue<'ctx>, String> {
+        let arg_values = self.collect_args(args)?;
+
+        if !arg_values.is_empty() {
+            return Err("Nullary operator takes no arguments".to_string());
+        }
+
+        let result = codegen
+            .builder
+            .build_call(func, &[], "nullary")
+            .map_err(|e| e.to_string())?
+            .try_as_basic_value()
+            .left()
+            .ok_or_else(|| "Nullary op did not return a value".to_string())?
+            .into_struct_value();
+
+        Ok(result)
+    }
+
     /// Compile a unary operation (like not, atom, nil?, etc.).
     fn compile_unary_op<'ctx>(
         &self,
@@ -1734,6 +1793,12 @@ impl JitEngine {
         engine.add_global_mapping(&codegen.rt_closure_fn_ptr, rt_closure_fn_ptr as usize);
         engine.add_global_mapping(&codegen.rt_closure_env_get, rt_closure_env_get as usize);
         engine.add_global_mapping(&codegen.rt_closure_env_size, rt_closure_env_size as usize);
+        // Standard library functions
+        engine.add_global_mapping(&codegen.rt_now, rt_now as usize);
+        engine.add_global_mapping(&codegen.rt_length, rt_length as usize);
+        engine.add_global_mapping(&codegen.rt_append, rt_append as usize);
+        engine.add_global_mapping(&codegen.rt_reverse, rt_reverse as usize);
+        engine.add_global_mapping(&codegen.rt_nth, rt_nth as usize);
     }
 }
 
@@ -2500,5 +2565,123 @@ mod tests {
             .unwrap();
         // 10! = 3628800
         assert_eq!(result.to_int(), Some(3628800));
+    }
+
+    // ========================================================================
+    // Standard Library Function Tests
+    // ========================================================================
+
+    #[test]
+    fn test_eval_now() {
+        let engine = JitEngine::new().unwrap();
+        // (now) should return a reasonable Unix timestamp
+        let result = engine.eval(&parse("(now)").unwrap()).unwrap();
+        let timestamp = result.to_int().unwrap();
+        // Timestamp should be reasonable (after 2020 = 1577836800)
+        assert!(timestamp > 1577836800);
+    }
+
+    #[test]
+    fn test_eval_length_empty() {
+        let engine = JitEngine::new().unwrap();
+        // (length nil) => 0
+        let result = engine.eval(&parse("(length nil)").unwrap()).unwrap();
+        assert_eq!(result.to_int(), Some(0));
+    }
+
+    #[test]
+    fn test_eval_length_list() {
+        let engine = JitEngine::new().unwrap();
+        // (length '(1 2 3)) => 3
+        let result = engine.eval(&parse("(length '(1 2 3))").unwrap()).unwrap();
+        assert_eq!(result.to_int(), Some(3));
+    }
+
+    #[test]
+    fn test_eval_length_single() {
+        let engine = JitEngine::new().unwrap();
+        // (length '(42)) => 1
+        let result = engine.eval(&parse("(length '(42))").unwrap()).unwrap();
+        assert_eq!(result.to_int(), Some(1));
+    }
+
+    #[test]
+    fn test_eval_append() {
+        let engine = JitEngine::new().unwrap();
+        // (length (append '(1 2) '(3 4))) => 4
+        let result = engine
+            .eval(&parse("(length (append '(1 2) '(3 4)))").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(4));
+    }
+
+    #[test]
+    fn test_eval_append_empty_first() {
+        let engine = JitEngine::new().unwrap();
+        // (length (append nil '(1 2 3))) => 3
+        let result = engine
+            .eval(&parse("(length (append nil '(1 2 3)))").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(3));
+    }
+
+    #[test]
+    fn test_eval_append_empty_second() {
+        let engine = JitEngine::new().unwrap();
+        // (length (append '(1 2) nil)) => 2
+        let result = engine
+            .eval(&parse("(length (append '(1 2) nil))").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(2));
+    }
+
+    #[test]
+    fn test_eval_reverse() {
+        let engine = JitEngine::new().unwrap();
+        // (car (reverse '(1 2 3))) => 3
+        let result = engine
+            .eval(&parse("(car (reverse '(1 2 3)))").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(3));
+    }
+
+    #[test]
+    fn test_eval_reverse_empty() {
+        let engine = JitEngine::new().unwrap();
+        // (reverse nil) => nil
+        let result = engine.eval(&parse("(reverse nil)").unwrap()).unwrap();
+        assert!(result.is_nil());
+    }
+
+    #[test]
+    fn test_eval_nth_first() {
+        let engine = JitEngine::new().unwrap();
+        // (nth '(10 20 30) 0) => 10
+        let result = engine.eval(&parse("(nth '(10 20 30) 0)").unwrap()).unwrap();
+        assert_eq!(result.to_int(), Some(10));
+    }
+
+    #[test]
+    fn test_eval_nth_middle() {
+        let engine = JitEngine::new().unwrap();
+        // (nth '(10 20 30) 1) => 20
+        let result = engine.eval(&parse("(nth '(10 20 30) 1)").unwrap()).unwrap();
+        assert_eq!(result.to_int(), Some(20));
+    }
+
+    #[test]
+    fn test_eval_nth_last() {
+        let engine = JitEngine::new().unwrap();
+        // (nth '(10 20 30) 2) => 30
+        let result = engine.eval(&parse("(nth '(10 20 30) 2)").unwrap()).unwrap();
+        assert_eq!(result.to_int(), Some(30));
+    }
+
+    #[test]
+    fn test_eval_nth_out_of_bounds() {
+        let engine = JitEngine::new().unwrap();
+        // (nth '(10 20 30) 5) => nil
+        let result = engine.eval(&parse("(nth '(10 20 30) 5)").unwrap()).unwrap();
+        assert!(result.is_nil());
     }
 }

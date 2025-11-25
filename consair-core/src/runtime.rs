@@ -1204,6 +1204,127 @@ pub extern "C" fn rt_closure_env_size(val: RuntimeValue) -> u32 {
 }
 
 // ============================================================================
+// Standard Library Runtime Functions
+// ============================================================================
+
+/// Get current Unix timestamp (seconds since epoch).
+#[unsafe(no_mangle)]
+pub extern "C" fn rt_now() -> RuntimeValue {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => RuntimeValue::from_int(duration.as_secs() as i64),
+        Err(_) => RuntimeValue::from_int(0),
+    }
+}
+
+/// Get the length of a list.
+/// Returns 0 for non-list values.
+#[unsafe(no_mangle)]
+pub extern "C" fn rt_length(val: RuntimeValue) -> RuntimeValue {
+    let mut count: i64 = 0;
+    let mut current = val;
+
+    while current.tag == TAG_CONS {
+        count += 1;
+        let ptr = current.data as *const RuntimeConsCell;
+        if ptr.is_null() {
+            break;
+        }
+        current = unsafe { (*ptr).cdr };
+    }
+
+    RuntimeValue::from_int(count)
+}
+
+/// Append two lists.
+/// (append '(1 2) '(3 4)) => (1 2 3 4)
+#[unsafe(no_mangle)]
+pub extern "C" fn rt_append(list1: RuntimeValue, list2: RuntimeValue) -> RuntimeValue {
+    // If first list is nil, return second list
+    if list1.tag == TAG_NIL {
+        return list2;
+    }
+
+    // If first list is not a cons, return second list
+    if list1.tag != TAG_CONS {
+        return list2;
+    }
+
+    // Collect elements of first list
+    let mut elements = Vec::new();
+    let mut current = list1;
+    while current.tag == TAG_CONS {
+        let ptr = current.data as *const RuntimeConsCell;
+        if ptr.is_null() {
+            break;
+        }
+        unsafe {
+            elements.push((*ptr).car);
+            current = (*ptr).cdr;
+        }
+    }
+
+    // Build result in reverse, starting from list2
+    let mut result = list2;
+    for elem in elements.into_iter().rev() {
+        result = rt_cons(elem, result);
+    }
+
+    result
+}
+
+/// Reverse a list.
+#[unsafe(no_mangle)]
+pub extern "C" fn rt_reverse(list: RuntimeValue) -> RuntimeValue {
+    let mut result = RuntimeValue::nil();
+    let mut current = list;
+
+    while current.tag == TAG_CONS {
+        let ptr = current.data as *const RuntimeConsCell;
+        if ptr.is_null() {
+            break;
+        }
+        unsafe {
+            result = rt_cons((*ptr).car, result);
+            current = (*ptr).cdr;
+        }
+    }
+
+    result
+}
+
+/// Get the nth element of a list (0-indexed).
+/// Returns nil if index is out of bounds.
+#[unsafe(no_mangle)]
+pub extern "C" fn rt_nth(list: RuntimeValue, index: RuntimeValue) -> RuntimeValue {
+    let n = match index.to_int() {
+        Some(i) if i >= 0 => i as usize,
+        _ => return RuntimeValue::nil(),
+    };
+
+    let mut current = list;
+    let mut i = 0;
+
+    while current.tag == TAG_CONS {
+        if i == n {
+            let ptr = current.data as *const RuntimeConsCell;
+            if ptr.is_null() {
+                return RuntimeValue::nil();
+            }
+            return unsafe { (*ptr).car };
+        }
+        let ptr = current.data as *const RuntimeConsCell;
+        if ptr.is_null() {
+            break;
+        }
+        current = unsafe { (*ptr).cdr };
+        i += 1;
+    }
+
+    RuntimeValue::nil()
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 

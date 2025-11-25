@@ -51,6 +51,12 @@ pub struct Codegen<'ctx> {
     pub rt_closure_fn_ptr: FunctionValue<'ctx>,
     pub rt_closure_env_get: FunctionValue<'ctx>,
     pub rt_closure_env_size: FunctionValue<'ctx>,
+    // Standard library functions
+    pub rt_now: FunctionValue<'ctx>,
+    pub rt_length: FunctionValue<'ctx>,
+    pub rt_append: FunctionValue<'ctx>,
+    pub rt_reverse: FunctionValue<'ctx>,
+    pub rt_nth: FunctionValue<'ctx>,
 }
 
 impl<'ctx> Codegen<'ctx> {
@@ -96,6 +102,12 @@ impl<'ctx> Codegen<'ctx> {
             rt_closure_fn_ptr: unsafe { std::mem::zeroed() },
             rt_closure_env_get: unsafe { std::mem::zeroed() },
             rt_closure_env_size: unsafe { std::mem::zeroed() },
+            // Standard library functions
+            rt_now: unsafe { std::mem::zeroed() },
+            rt_length: unsafe { std::mem::zeroed() },
+            rt_append: unsafe { std::mem::zeroed() },
+            rt_reverse: unsafe { std::mem::zeroed() },
+            rt_nth: unsafe { std::mem::zeroed() },
         };
 
         // Declare all runtime functions
@@ -127,7 +139,21 @@ impl<'ctx> Codegen<'ctx> {
         codegen.rt_closure_env_get = codegen.declare_closure_env_get_fn();
         codegen.rt_closure_env_size = codegen.declare_closure_env_size_fn();
 
+        // Standard library functions
+        codegen.rt_now = codegen.declare_nullary_fn("rt_now");
+        codegen.rt_length = codegen.declare_unary_fn("rt_length");
+        codegen.rt_append = codegen.declare_binary_fn("rt_append");
+        codegen.rt_reverse = codegen.declare_unary_fn("rt_reverse");
+        codegen.rt_nth = codegen.declare_binary_fn("rt_nth");
+
         codegen
+    }
+
+    /// Declare a nullary runtime function: () -> RuntimeValue
+    fn declare_nullary_fn(&self, name: &str) -> FunctionValue<'ctx> {
+        let fn_type = self.expr_fn_type();
+        self.module
+            .add_function(name, fn_type, Some(inkwell::module::Linkage::External))
     }
 
     /// Declare a unary runtime function: RuntimeValue -> RuntimeValue
