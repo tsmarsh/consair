@@ -15,11 +15,8 @@ This directory contains detailed implementation prompts for improving the Consai
 6. ~~[Split Parser Module](06-split-parser-module.md)~~ - ✅ **COMPLETED** (Lexer/Parser separated into distinct modules)
 7. ~~[Implement Tail Call Optimization](07-implement-tail-call-optimization.md)~~ - ✅ **COMPLETED** (via proposal #3)
 8. ~~[Add Property-Based Testing](08-add-property-based-tests.md)~~ - ✅ **COMPLETED** (Property tests for numeric operations with 1000 cases each)
-9. ~~[Add Comprehensive Benchmarks](09-add-benchmarks.md)~~ - ✅ **COMPLETED** (38 benchmarks covering parsing, eval, numeric, list, and string operations with HTML reports)
-15. ~~[Add Recursive Function Support](15-add-recursive-function-support.md)~~ - ✅ **COMPLETED** (Arc<RwLock> interior mutability enables recursion and mutual recursion)
 
 ### 🟢 Medium Priority
-10. ~~[Improve REPL Experience](10-improve-repl.md)~~ - ✅ **COMPLETED** (rustyline integration with history, multi-line input, and special commands)
 11. [Document Security Implications](11-document-security-implications.md) - Warn about shell injection risks
 16. [Add REPL Syntax Highlighting](16-add-repl-syntax-highlighting.md) - Color-coded syntax for better readability
 17. [Add REPL Tab Completion](17-add-repl-tab-completion.md) - Auto-complete symbols, functions, and commands
