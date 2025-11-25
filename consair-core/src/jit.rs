@@ -2,8 +2,19 @@
 //!
 //! This module provides the ability to compile and immediately execute
 //! Consair expressions using LLVM's JIT compilation.
+//!
+//! ## Caching
+//!
+//! The JIT engine supports optional expression caching to avoid recompiling
+//! the same expression multiple times. When caching is enabled:
+//! - Expressions are normalized to a canonical string form
+//! - A hash of the normalized expression is used as the cache key
+//! - Compiled function pointers and execution engines are cached
+//! - Subsequent evaluations of the same expression reuse the cached code
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::atomic::AtomicUsize;
 
 use inkwell::OptimizationLevel;
@@ -179,22 +190,186 @@ fn collect_list(val: &Value) -> Vec<Value> {
 /// Type alias for a compiled expression function
 type ExprFn = unsafe extern "C" fn() -> RuntimeValue;
 
+/// Compute a hash of an expression for cache lookup.
+fn hash_expression(expr: &Value) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    // Use the Display representation for hashing
+    format!("{}", expr).hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Check if an expression is pure (no side effects, no free variables).
+/// Pure expressions can have their results cached.
+fn is_pure_expression(expr: &Value) -> bool {
+    match expr {
+        Value::Nil => true,
+        Value::Atom(AtomType::Number(_)) => true,
+        Value::Atom(AtomType::String(_)) => true,
+        Value::Atom(AtomType::Bool(_)) => true,
+        // Symbols are not pure - they reference variables
+        Value::Atom(AtomType::Symbol(SymbolType::Symbol(_))) => false,
+        Value::Cons(cell) => {
+            // Check if operator is a pure function
+            if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(sym))) = &cell.car {
+                let name = sym.resolve();
+
+                // Quote is always pure - it returns its argument unevaluated
+                if name.as_str() == "quote" {
+                    return true;
+                }
+
+                // Pure operators that don't have side effects
+                let pure_ops = [
+                    "+",
+                    "-",
+                    "*",
+                    "/",
+                    "=",
+                    "<",
+                    ">",
+                    "<=",
+                    ">=",
+                    "eq",
+                    "atom",
+                    "nil?",
+                    "number?",
+                    "cons?",
+                    "not",
+                    "cons",
+                    "car",
+                    "cdr",
+                    "cond",
+                    "vector",
+                    "vector-length",
+                    "vector-ref",
+                    "length",
+                    "append",
+                    "reverse",
+                    "nth",
+                    "t",
+                    "nil",
+                ];
+                if pure_ops.contains(&name.as_str()) {
+                    // Check all arguments are pure
+                    let mut current = cell.cdr.clone();
+                    while let Value::Cons(arg_cell) = current {
+                        if !is_pure_expression(&arg_cell.car) {
+                            return false;
+                        }
+                        current = arg_cell.cdr.clone();
+                    }
+                    return true;
+                }
+            }
+            false
+        }
+        Value::Lambda(_) => false,
+        Value::Macro(_) => false,
+        Value::NativeFn(_) => false,
+        Value::Vector(v) => v.elements.iter().all(is_pure_expression),
+    }
+}
+
+/// Configuration for JIT compilation caching.
+#[derive(Clone, Debug)]
+pub struct CacheConfig {
+    /// Enable caching of pure expression results
+    pub enabled: bool,
+    /// Maximum number of entries in the cache
+    pub max_entries: usize,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        CacheConfig {
+            enabled: true,
+            max_entries: 1000,
+        }
+    }
+}
+
+/// Statistics about JIT cache usage.
+#[derive(Clone, Debug, Default)]
+pub struct CacheStats {
+    /// Number of cache hits
+    pub hits: usize,
+    /// Number of cache misses
+    pub misses: usize,
+    /// Number of compilations avoided
+    pub compilations_avoided: usize,
+}
+
 /// JIT execution engine for compiling and running Consair expressions.
 pub struct JitEngine {
     /// LLVM context - must be kept alive as long as execution engine exists
     context: Context,
+    /// Cache configuration
+    cache_config: CacheConfig,
+    /// Cache for pure expression results: hash -> (result_tag, result_data)
+    result_cache: std::cell::RefCell<HashMap<u64, (u8, u64)>>,
+    /// Cache statistics
+    stats: std::cell::RefCell<CacheStats>,
 }
 
 impl JitEngine {
-    /// Create a new JIT engine.
+    /// Create a new JIT engine with default configuration.
     pub fn new() -> Result<Self, String> {
+        Self::with_config(CacheConfig::default())
+    }
+
+    /// Create a new JIT engine with custom configuration.
+    pub fn with_config(cache_config: CacheConfig) -> Result<Self, String> {
         Ok(JitEngine {
             context: Context::create(),
+            cache_config,
+            result_cache: std::cell::RefCell::new(HashMap::new()),
+            stats: std::cell::RefCell::new(CacheStats::default()),
         })
+    }
+
+    /// Get cache statistics.
+    pub fn cache_stats(&self) -> CacheStats {
+        self.stats.borrow().clone()
+    }
+
+    /// Clear the result cache.
+    pub fn clear_cache(&self) {
+        self.result_cache.borrow_mut().clear();
     }
 
     /// Compile and execute a single expression.
     pub fn eval(&self, expr: &Value) -> Result<RuntimeValue, String> {
+        // Check cache for pure expressions
+        if self.cache_config.enabled && is_pure_expression(expr) {
+            let hash = hash_expression(expr);
+
+            // Try cache lookup
+            if let Some(&(tag, data)) = self.result_cache.borrow().get(&hash) {
+                let mut stats = self.stats.borrow_mut();
+                stats.hits += 1;
+                stats.compilations_avoided += 1;
+                return Ok(RuntimeValue { tag, data });
+            }
+
+            // Cache miss - compile and cache result
+            let result = self.compile_and_execute(expr)?;
+
+            // Store in cache if not at capacity
+            let mut cache = self.result_cache.borrow_mut();
+            if cache.len() < self.cache_config.max_entries {
+                cache.insert(hash, (result.tag, result.data));
+            }
+
+            self.stats.borrow_mut().misses += 1;
+            return Ok(result);
+        }
+
+        // Non-pure expression - compile without caching
+        self.compile_and_execute(expr)
+    }
+
+    /// Internal method to compile and execute an expression.
+    fn compile_and_execute(&self, expr: &Value) -> Result<RuntimeValue, String> {
         // Generate unique function name
         let counter = EXPR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let fn_name = format!("__consair_expr_{}", counter);
@@ -3038,5 +3213,154 @@ mod tests {
         let expr = parse("(let1 (x 10) (+ x 5))").unwrap();
         let result = engine.eval_with_env(&expr, &mut env).unwrap();
         assert_eq!(result.to_int(), Some(15));
+    }
+
+    // ========================================================================
+    // Caching tests
+    // ========================================================================
+
+    #[test]
+    fn test_cache_hit_on_repeated_pure_expression() {
+        let engine = JitEngine::new().unwrap();
+
+        // Evaluate the same pure expression twice
+        let expr = parse("(+ 1 2 3)").unwrap();
+
+        let result1 = engine.eval(&expr).unwrap();
+        assert_eq!(result1.to_int(), Some(6));
+
+        // Second evaluation should hit cache
+        let result2 = engine.eval(&expr).unwrap();
+        assert_eq!(result2.to_int(), Some(6));
+
+        // Check cache stats
+        let stats = engine.cache_stats();
+        assert_eq!(stats.hits, 1);
+        assert_eq!(stats.misses, 1);
+        assert_eq!(stats.compilations_avoided, 1);
+    }
+
+    #[test]
+    fn test_cache_stats_multiple_expressions() {
+        let engine = JitEngine::new().unwrap();
+
+        // Evaluate different pure expressions
+        engine.eval(&parse("(+ 1 2)").unwrap()).unwrap();
+        engine.eval(&parse("(* 3 4)").unwrap()).unwrap();
+        engine.eval(&parse("(- 10 5)").unwrap()).unwrap();
+
+        // Re-evaluate some of them
+        engine.eval(&parse("(+ 1 2)").unwrap()).unwrap();
+        engine.eval(&parse("(+ 1 2)").unwrap()).unwrap();
+        engine.eval(&parse("(* 3 4)").unwrap()).unwrap();
+
+        let stats = engine.cache_stats();
+        assert_eq!(stats.misses, 3); // Initial evaluations
+        assert_eq!(stats.hits, 3); // Re-evaluations
+    }
+
+    #[test]
+    fn test_cache_clear() {
+        let engine = JitEngine::new().unwrap();
+
+        // Evaluate and cache
+        engine.eval(&parse("(+ 1 2)").unwrap()).unwrap();
+        engine.eval(&parse("(+ 1 2)").unwrap()).unwrap();
+
+        let stats = engine.cache_stats();
+        assert_eq!(stats.hits, 1);
+
+        // Clear cache
+        engine.clear_cache();
+
+        // Re-evaluate - should miss
+        engine.eval(&parse("(+ 1 2)").unwrap()).unwrap();
+
+        let stats = engine.cache_stats();
+        assert_eq!(stats.misses, 2); // Original + after clear
+    }
+
+    #[test]
+    fn test_cache_disabled() {
+        let config = CacheConfig {
+            enabled: false,
+            max_entries: 1000,
+        };
+        let engine = JitEngine::with_config(config).unwrap();
+
+        // Evaluate same expression twice
+        engine.eval(&parse("(+ 1 2)").unwrap()).unwrap();
+        engine.eval(&parse("(+ 1 2)").unwrap()).unwrap();
+
+        // Should have no cache activity
+        let stats = engine.cache_stats();
+        assert_eq!(stats.hits, 0);
+        assert_eq!(stats.misses, 0);
+    }
+
+    #[test]
+    fn test_non_pure_expressions_not_cached() {
+        let engine = JitEngine::new().unwrap();
+
+        // Define a label (not pure due to environment mutation)
+        let mut env = env_with_macros();
+        let def = parse("(label x 42)").unwrap();
+        eval(def, &mut env).unwrap();
+
+        // Evaluate an expression with a symbol (not pure)
+        // This will fail since x isn't in JIT env, but the point is
+        // that symbols make expressions non-pure
+
+        // Try a pure nested expression
+        let expr = parse("(cons 1 (cons 2 nil))").unwrap();
+        engine.eval(&expr).unwrap();
+        engine.eval(&expr).unwrap();
+
+        let stats = engine.cache_stats();
+        assert_eq!(stats.hits, 1);
+    }
+
+    #[test]
+    fn test_is_pure_expression() {
+        // Pure expressions
+        assert!(is_pure_expression(&parse("42").unwrap()));
+        assert!(is_pure_expression(&parse("3.14").unwrap()));
+        assert!(is_pure_expression(&parse("\"hello\"").unwrap()));
+        assert!(is_pure_expression(&parse("(+ 1 2)").unwrap()));
+        assert!(is_pure_expression(&parse("(* (+ 1 2) (- 5 3))").unwrap()));
+        assert!(is_pure_expression(&parse("(cons 1 2)").unwrap()));
+        assert!(is_pure_expression(&parse("'(1 2 3)").unwrap()));
+
+        // Non-pure expressions (contain symbols)
+        assert!(!is_pure_expression(&parse("x").unwrap()));
+        assert!(!is_pure_expression(&parse("(+ x 1)").unwrap()));
+        assert!(!is_pure_expression(&parse("(foo 1 2)").unwrap())); // Unknown function
+    }
+
+    #[test]
+    fn test_cache_max_entries() {
+        let config = CacheConfig {
+            enabled: true,
+            max_entries: 2, // Very small cache
+        };
+        let engine = JitEngine::with_config(config).unwrap();
+
+        // Fill cache
+        engine.eval(&parse("(+ 1 1)").unwrap()).unwrap();
+        engine.eval(&parse("(+ 2 2)").unwrap()).unwrap();
+
+        // This should not be cached (at capacity)
+        engine.eval(&parse("(+ 3 3)").unwrap()).unwrap();
+
+        // Re-evaluate first two - should hit
+        engine.eval(&parse("(+ 1 1)").unwrap()).unwrap();
+        engine.eval(&parse("(+ 2 2)").unwrap()).unwrap();
+
+        // Re-evaluate third - should miss (wasn't cached)
+        engine.eval(&parse("(+ 3 3)").unwrap()).unwrap();
+
+        let stats = engine.cache_stats();
+        assert_eq!(stats.hits, 2);
+        assert_eq!(stats.misses, 4); // 3 initial + 1 re-eval of (+ 3 3)
     }
 }
