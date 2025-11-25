@@ -486,8 +486,9 @@ fn expand_macro_once(
     Ok((expr, false))
 }
 
-/// Recursively expand all macros in an expression
-fn expand_macros(expr: Value, env: &mut Environment, depth: usize) -> Result<Value, String> {
+/// Recursively expand all macros in an expression.
+/// This is public so that the JIT can expand macros before compilation.
+pub fn expand_macros(expr: Value, env: &mut Environment, depth: usize) -> Result<Value, String> {
     let (mut result, mut expanded) = expand_macro_once(expr, env, depth)?;
 
     // Keep expanding until no more macros
@@ -498,4 +499,37 @@ fn expand_macros(expr: Value, env: &mut Environment, depth: usize) -> Result<Val
     }
 
     Ok(result)
+}
+
+/// Recursively expand all macros in an expression and its sub-expressions.
+/// This walks the entire expression tree to expand macros at all levels.
+/// Use this for JIT compilation where we need all macros expanded before compilation.
+pub fn expand_all_macros(
+    expr: Value,
+    env: &mut Environment,
+    depth: usize,
+) -> Result<Value, String> {
+    // First expand any macros at the top level
+    let expanded = expand_macros(expr, env, depth)?;
+
+    // Then recursively expand in sub-expressions
+    match expanded {
+        Value::Cons(cell) => {
+            // Check if this is a quote - don't expand inside quotes
+            if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(sym))) = &cell.car
+                && sym.resolve() == "quote"
+            {
+                return Ok(Value::Cons(cell));
+            }
+
+            // Expand the car and cdr recursively
+            let expanded_car = expand_all_macros(cell.car.clone(), env, depth)?;
+            let expanded_cdr = expand_all_macros(cell.cdr.clone(), env, depth)?;
+
+            // Create a new cons cell with the expanded values
+            Ok(cons(expanded_car, expanded_cdr))
+        }
+        // For non-cons values, just return as-is
+        _ => Ok(expanded),
+    }
 }

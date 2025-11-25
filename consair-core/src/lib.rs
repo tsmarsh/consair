@@ -16,7 +16,7 @@ pub mod jit;
 pub mod runtime;
 
 // Re-export commonly used items for convenience
-pub use interpreter::{Environment, eval};
+pub use interpreter::{Environment, eval, expand_all_macros, expand_macros};
 pub use language::{AtomType, ConsCell, LambdaCell, NativeFn, Value, VectorValue, cons};
 pub use numeric::NumericType;
 pub use parser::parse;

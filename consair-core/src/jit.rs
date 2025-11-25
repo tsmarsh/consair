@@ -13,6 +13,7 @@ use inkwell::values::FunctionValue;
 
 use crate::codegen::Codegen;
 use crate::interner::InternedSymbol;
+use crate::interpreter::{Environment, expand_all_macros};
 use crate::language::{AtomType, SymbolType, Value};
 use crate::numeric::NumericType;
 use crate::runtime::RuntimeValue;
@@ -231,6 +232,23 @@ impl JitEngine {
         let result = unsafe { func.call() };
 
         Ok(result)
+    }
+
+    /// Compile and execute an expression with macro expansion.
+    ///
+    /// This method expands all macros in the expression using the provided
+    /// interpreter environment before JIT compilation. Use this when you
+    /// have macros defined in the environment that should be expanded.
+    pub fn eval_with_env(
+        &self,
+        expr: &Value,
+        env: &mut Environment,
+    ) -> Result<RuntimeValue, String> {
+        // Expand all macros recursively using the interpreter's environment
+        let expanded = expand_all_macros(expr.clone(), env, 0)?;
+
+        // Compile and execute the expanded expression
+        self.eval(&expanded)
     }
 
     /// Compile an expression into LLVM IR.
@@ -2894,5 +2912,131 @@ mod tests {
             .eval(&parse("(vector-ref (vector (+ 1 2) (* 3 4) (- 10 5)) 2)").unwrap())
             .unwrap();
         assert_eq!(result.to_int(), Some(5));
+    }
+
+    // ========================================================================
+    // Macro expansion tests
+    // ========================================================================
+
+    use crate::interpreter::eval;
+    use crate::stdlib::register_stdlib;
+
+    /// Helper to create an environment with macros defined
+    fn env_with_macros() -> Environment {
+        let mut env = Environment::new();
+        register_stdlib(&mut env);
+        env
+    }
+
+    #[test]
+    fn test_eval_with_env_simple_when_macro() {
+        let engine = JitEngine::new().unwrap();
+        let mut env = env_with_macros();
+
+        // Define a 'when' macro: (defmacro when (condition body) `(cond (,condition ,body) (t nil)))
+        let macro_def =
+            parse("(defmacro when (condition body) `(cond (,condition ,body) (t nil)))").unwrap();
+        eval(macro_def, &mut env).unwrap();
+
+        // Use the macro via eval_with_env
+        // (when t 42) should expand to (cond (t 42) (t nil)) => 42
+        let expr = parse("(when t 42)").unwrap();
+        let result = engine.eval_with_env(&expr, &mut env).unwrap();
+        assert_eq!(result.to_int(), Some(42));
+    }
+
+    #[test]
+    fn test_eval_with_env_when_false() {
+        let engine = JitEngine::new().unwrap();
+        let mut env = env_with_macros();
+
+        // Define a 'when' macro
+        let macro_def =
+            parse("(defmacro when (condition body) `(cond (,condition ,body) (t nil)))").unwrap();
+        eval(macro_def, &mut env).unwrap();
+
+        // (when nil 42) should expand to (cond (nil 42) (t nil)) => nil
+        let expr = parse("(when nil 42)").unwrap();
+        let result = engine.eval_with_env(&expr, &mut env).unwrap();
+        assert!(result.is_nil());
+    }
+
+    #[test]
+    fn test_eval_with_env_unless_macro() {
+        let engine = JitEngine::new().unwrap();
+        let mut env = env_with_macros();
+
+        // Define an 'unless' macro: (defmacro unless (condition body) `(cond (,condition nil) (t ,body)))
+        let macro_def =
+            parse("(defmacro unless (condition body) `(cond (,condition nil) (t ,body)))").unwrap();
+        eval(macro_def, &mut env).unwrap();
+
+        // (unless nil 42) should return 42
+        let expr = parse("(unless nil 42)").unwrap();
+        let result = engine.eval_with_env(&expr, &mut env).unwrap();
+        assert_eq!(result.to_int(), Some(42));
+
+        // (unless t 42) should return nil
+        let expr = parse("(unless t 42)").unwrap();
+        let result = engine.eval_with_env(&expr, &mut env).unwrap();
+        assert!(result.is_nil());
+    }
+
+    #[test]
+    fn test_eval_with_env_arithmetic_macro() {
+        let engine = JitEngine::new().unwrap();
+        let mut env = env_with_macros();
+
+        // Define a 'double' macro: (defmacro double (x) `(+ ,x ,x))
+        let macro_def = parse("(defmacro double (x) `(+ ,x ,x))").unwrap();
+        eval(macro_def, &mut env).unwrap();
+
+        // (double 21) should expand to (+ 21 21) => 42
+        let expr = parse("(double 21)").unwrap();
+        let result = engine.eval_with_env(&expr, &mut env).unwrap();
+        assert_eq!(result.to_int(), Some(42));
+    }
+
+    #[test]
+    fn test_eval_with_env_nested_macro() {
+        let engine = JitEngine::new().unwrap();
+        let mut env = env_with_macros();
+
+        // Define 'double' macro
+        let macro_def = parse("(defmacro double (x) `(+ ,x ,x))").unwrap();
+        eval(macro_def, &mut env).unwrap();
+
+        // (double (double 5)) should expand to (+ (+ 5 5) (+ 5 5)) => 20
+        let expr = parse("(double (double 5))").unwrap();
+        let result = engine.eval_with_env(&expr, &mut env).unwrap();
+        assert_eq!(result.to_int(), Some(20));
+    }
+
+    #[test]
+    fn test_eval_with_env_no_macro() {
+        let engine = JitEngine::new().unwrap();
+        let mut env = env_with_macros();
+
+        // Without macros, eval_with_env should work like eval
+        let expr = parse("(+ 1 2 3)").unwrap();
+        let result = engine.eval_with_env(&expr, &mut env).unwrap();
+        assert_eq!(result.to_int(), Some(6));
+    }
+
+    #[test]
+    fn test_eval_with_env_let_macro() {
+        let engine = JitEngine::new().unwrap();
+        let mut env = env_with_macros();
+
+        // Define a simple 'let1' macro for single binding: (let1 (x val) body)
+        // Expands to: ((lambda (x) body) val)
+        let macro_def =
+            parse("(defmacro let1 (binding body) `((lambda (,(car binding)) ,body) ,(car (cdr binding))))").unwrap();
+        eval(macro_def, &mut env).unwrap();
+
+        // (let1 (x 10) (+ x 5)) should expand to ((lambda (x) (+ x 5)) 10) => 15
+        let expr = parse("(let1 (x 10) (+ x 5))").unwrap();
+        let result = engine.eval_with_env(&expr, &mut env).unwrap();
+        assert_eq!(result.to_int(), Some(15));
     }
 }
