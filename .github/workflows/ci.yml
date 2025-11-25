@@ -34,6 +34,46 @@ jobs:
       - name: Run integration tests
         run: cargo test --test integration_tests --verbose
 
+  test-jit:
+    name: Test JIT
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        rust: [stable]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Install LLVM 17 (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+          echo "LLVM_SYS_170_PREFIX=/usr/lib/llvm-17" >> $GITHUB_ENV
+
+      - name: Install LLVM 17 (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install llvm@17
+          echo "LLVM_SYS_170_PREFIX=$(brew --prefix llvm@17)" >> $GITHUB_ENV
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: jit
+
+      - name: Run JIT tests
+        run: cargo test --features jit --verbose
+
+      - name: Run JIT integration tests
+        run: cargo test --features jit --test jit_tests --verbose
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

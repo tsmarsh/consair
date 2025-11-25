@@ -147,6 +147,52 @@ cargo build --release
 
 The binary will be available at `target/release/cons`.
 
+#### Build with JIT Compilation (Experimental)
+
+Consair supports optional JIT compilation via LLVM for significantly faster execution of compute-intensive code.
+
+**Prerequisites:**
+- LLVM 17 must be installed on your system
+- The `LLVM_SYS_170_PREFIX` environment variable should point to your LLVM installation
+
+**Linux (Ubuntu/Debian):**
+```bash
+# Install LLVM 17
+wget https://apt.llvm.org/llvm.sh
+chmod +x llvm.sh
+sudo ./llvm.sh 17
+
+# Set environment variable
+export LLVM_SYS_170_PREFIX=/usr/lib/llvm-17
+
+# Build with JIT support
+cargo build --release --features jit
+```
+
+**macOS:**
+```bash
+# Install LLVM 17
+brew install llvm@17
+
+# Set environment variable
+export LLVM_SYS_170_PREFIX=$(brew --prefix llvm@17)
+
+# Build with JIT support
+cargo build --release --features jit
+```
+
+**Arch Linux:**
+```bash
+# Install LLVM 17
+sudo pacman -S llvm17
+
+# Set environment variable
+export LLVM_SYS_170_PREFIX=/usr
+
+# Build with JIT support
+cargo build --release --features jit
+```
+
 #### Run the REPL
 ```bash
 cargo run --release

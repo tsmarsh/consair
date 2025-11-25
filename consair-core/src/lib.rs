@@ -7,6 +7,14 @@ pub mod numeric;
 pub mod parser;
 pub mod stdlib;
 
+// JIT compilation modules (optional)
+#[cfg(feature = "jit")]
+pub mod codegen;
+#[cfg(feature = "jit")]
+pub mod jit;
+#[cfg(feature = "jit")]
+pub mod runtime;
+
 // Re-export commonly used items for convenience
 pub use interpreter::{Environment, eval};
 pub use language::{AtomType, ConsCell, LambdaCell, NativeFn, Value, VectorValue, cons};
