@@ -8,13 +8,21 @@
 [![codecov](https://codecov.io/gh/tsmarsh/consair/branch/main/graph/badge.svg)](https://codecov.io/gh/tsmarsh/consair)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A minimal Lisp interpreter based on Paul Graham's exposition of McCarthy's 1960 paper, implemented in Rust using reference counting instead of traditional garbage collection.
+A minimal Lisp interpreter based on Paul Graham's exposition of McCarthy's 1960 paper, implemented in Rust.
 
-**Now with optional LLVM JIT compilation** - arithmetic operations execute in **under 4 nanoseconds** when pre-compiled!
+**No garbage collector. No global interpreter lock. Just fast, predictable execution.**
+
+Optional LLVM JIT compilation delivers **sub-4-nanosecond** arithmetic execution.
 
 ## Design Philosophy
 
-This implementation demonstrates how Rust's ownership system and `Rc` (reference counting) can provide automatic memory management for a Lisp interpreter without traditional garbage collection. The key insight is that immutable cons cells can be safely shared via `Rc`, and memory is freed automatically when references are dropped.
+Consair proves that a Lisp doesn't need a garbage collector or a GIL. By leveraging Rust's ownership system with `Arc` (atomic reference counting), memory is freed **instantly** when the last reference is dropped - no stop-the-world pauses, no GC tuning, no unpredictable latency spikes.
+
+**Key principles:**
+- **No GC**: Atomic reference counting provides deterministic memory management
+- **No GIL**: True parallelism - multiple threads can execute Consair code simultaneously
+- **Thread-safe**: All values implement `Send + Sync` by design
+- **Structure sharing**: Immutable cons cells are safely shared via `Arc`
 
 ## Core Features
 

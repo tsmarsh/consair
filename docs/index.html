@@ -292,9 +292,9 @@
         <div class="container">
             <img src="images/logo.png" alt="Consair Logo" class="hero-logo">
             <h2>Minimal Lisp in Rust</h2>
-            <p>A pure implementation of McCarthy's 1960 Lisp using Rust's ownership system</p>
-            <p>Extended with strings, keywords, numbers, vectors, and <strong>LLVM JIT compilation</strong></p>
-            <p style="color: var(--green); font-size: 1rem; margin-top: 10px;">⚡ Arithmetic executes in under 4 nanoseconds with JIT</p>
+            <p><strong>No garbage collector. No global interpreter lock.</strong></p>
+            <p>A pure implementation of McCarthy's 1960 Lisp with LLVM JIT compilation</p>
+            <p style="color: var(--green); font-size: 1rem; margin-top: 10px;">⚡ Sub-4-nanosecond execution • Deterministic memory • True parallelism</p>
             <div class="cta-buttons">
                 <a href="https://github.com/tsmarsh/consair/releases/latest" class="btn btn-primary">Download Latest Release</a>
                 <a href="https://github.com/tsmarsh/consair" class="btn btn-secondary">View on GitHub</a>
@@ -337,13 +337,18 @@
                 </div>
 
                 <div class="feature-card">
-                    <h4>♻️ Rc-Based Memory</h4>
-                    <p>Zero-copy structure sharing with automatic reference counting - no garbage collector needed</p>
+                    <h4>🚫 No Garbage Collector</h4>
+                    <p>Atomic reference counting frees memory <strong>instantly</strong> when the last reference drops. No GC pauses, no tuning, deterministic latency.</p>
                 </div>
 
                 <div class="feature-card">
-                    <h4>🔒 Memory Safe</h4>
-                    <p>100% safe Rust - passes the borrow checker without any unsafe blocks</p>
+                    <h4>🔓 No Global Interpreter Lock</h4>
+                    <p>True parallelism - multiple threads can execute Consair code simultaneously. All values implement <span class="spec-highlight">Send + Sync</span>.</p>
+                </div>
+
+                <div class="feature-card">
+                    <h4>♻️ Arc-Based Memory</h4>
+                    <p>Zero-copy structure sharing with atomic reference counting. Immutable cons cells safely shared across threads.</p>
                 </div>
 
                 <div class="feature-card">
