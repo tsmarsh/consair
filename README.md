@@ -253,7 +253,52 @@ cons examples/stdlib.lisp
 cons              # Start interactive REPL
 cons <file.lisp>  # Run a Lisp file
 cons --help       # Show help message
+cons --jit        # Start REPL with JIT compilation enabled (requires jit feature)
 ```
+
+### JIT Compilation Mode
+
+When built with the `jit` feature, Consair can use LLVM to compile expressions to native code for faster execution.
+
+**Starting in JIT mode:**
+```bash
+# Build with JIT support
+cargo build --release --features jit
+
+# Start REPL with JIT enabled
+./target/release/cons --jit
+```
+
+**Toggling JIT in the REPL:**
+```
+consair> :jit
+JIT compilation enabled
+consair[jit]> (+ 1 2)
+3
+consair[jit]> :jit
+JIT compilation disabled
+consair>
+```
+
+**JIT Features:**
+- Compiles arithmetic operations, conditionals, and function calls to native code
+- Supports closures and recursive functions
+- Automatic macro expansion before compilation
+- Result caching for pure expressions
+- Graceful fallback to interpreter on unsupported expressions
+
+**What gets JIT compiled:**
+- Arithmetic: `+`, `-`, `*`, `/`, `%`
+- Comparisons: `<`, `>`, `<=`, `>=`, `=`, `eq`
+- List operations: `cons`, `car`, `cdr`, `list`
+- Control flow: `cond`, `lambda`, `label`
+- Vectors: `vec`, `vec-get`, `vec-set`, `vec-len`
+- Macros (expanded before compilation)
+
+**What falls back to interpreter:**
+- I/O operations: `print`, `println`, `slurp`, `spit`
+- System calls: `shell`, `now`
+- Definitions at REPL (values are JIT-compiled, bindings handled by interpreter)
 
 ## Example Usage
 

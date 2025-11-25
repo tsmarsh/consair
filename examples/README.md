@@ -58,6 +58,22 @@ Recursive function example (note: uses cons cells to represent numbers)
 cons examples/factorial.lisp
 ```
 
+### `jit-demo.lisp`
+JIT compilation demonstration (requires `jit` feature):
+- Arithmetic operations compiled to native code
+- Recursive functions (factorial, fibonacci)
+- Closures and higher-order functions
+- Vector operations
+- Macro expansion before JIT compilation
+
+```bash
+# Build with JIT support first
+cargo build --release --features jit
+
+# Run the demo
+./target/release/cons --jit examples/jit-demo.lisp
+```
+
 ## Creating Your Own Programs
 
 Create a `.lisp` file with Lisp expressions, one per line or spanning multiple lines:

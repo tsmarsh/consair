@@ -138,6 +138,99 @@ Tradeoffs:
 - Circular references will leak (acceptable for this use case)
 - Not thread-safe (use `Arc` for concurrency)
 
+## JIT Compilation (Optional)
+
+When built with the `jit` feature, `consair-core` provides LLVM-based JIT compilation:
+
+```toml
+[dependencies]
+consair-core = { path = "../consair-core", features = ["jit"] }
+```
+
+### Using the JIT Engine
+
+```rust
+use consair::{parse, Environment, JitEngine};
+
+fn main() {
+    let mut env = Environment::new();
+    let jit = JitEngine::new();
+
+    // Parse an expression
+    let expr = parse("(+ (* 2 3) 4)").unwrap();
+
+    // JIT compile and execute
+    let result = jit.eval(&expr).unwrap();
+    println!("Result: {:?}", result.to_value());  // 10
+}
+```
+
+### JIT with Environment Bindings
+
+```rust
+use consair::{parse, eval, Environment, JitEngine};
+
+let mut env = Environment::new();
+let jit = JitEngine::new();
+
+// Define functions in the interpreter
+eval(parse("(label square (lambda (x) (* x x)))").unwrap(), &mut env).unwrap();
+
+// Use JIT with environment (macro expansion + JIT)
+let expr = parse("(square 5)").unwrap();
+let result = jit.eval_with_env(&expr, &mut env).unwrap();
+```
+
+### JIT Caching
+
+The JIT engine can cache results of pure expressions:
+
+```rust
+use consair::{JitEngine, CacheConfig};
+
+let jit = JitEngine::with_config(CacheConfig {
+    enabled: true,
+    max_entries: 1000,
+});
+
+// First call compiles and caches
+jit.eval(&expr).unwrap();
+
+// Second call returns cached result (no recompilation)
+jit.eval(&expr).unwrap();
+
+// Check cache statistics
+let stats = jit.cache_stats();
+println!("Hits: {}, Misses: {}", stats.hits, stats.misses);
+```
+
+### JIT API
+
+- `JitEngine::new()` - Create a new JIT engine
+- `JitEngine::with_config(config)` - Create with custom cache settings
+- `jit.eval(expr)` - JIT compile and evaluate an expression
+- `jit.eval_with_env(expr, env)` - Evaluate with macro expansion
+- `jit.cache_stats()` - Get cache hit/miss statistics
+- `jit.clear_cache()` - Clear the result cache
+
+### RuntimeValue
+
+JIT-compiled code uses a C-ABI compatible value representation:
+
+```rust
+#[repr(C)]
+pub struct RuntimeValue {
+    pub tag: u8,    // Type discriminator
+    pub data: u64,  // Payload (int, float bits, or pointer)
+}
+```
+
+Convert between `RuntimeValue` and `Value`:
+```rust
+let runtime_val: RuntimeValue = (&value).into();
+let value: Value = runtime_val.to_value()?;
+```
+
 ## Examples
 
 See the `cons` executable for a complete REPL implementation.

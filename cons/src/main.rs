@@ -575,7 +575,78 @@ fn print_usage() {
     eprintln!("  cons <file.lisp>  Run a Lisp file");
     eprintln!("  cons --help       Show this help message");
     #[cfg(feature = "jit")]
-    eprintln!("  cons --jit        Start REPL with JIT compilation enabled");
+    {
+        eprintln!("  cons --jit        Start REPL with JIT compilation enabled");
+        eprintln!("  cons --jit <file> Run a Lisp file with JIT compilation");
+    }
+}
+
+/// Check if an expression is a definition (label, defmacro) that must use interpreter
+#[cfg(feature = "jit")]
+fn is_definition_expr(expr: &consair::Value) -> bool {
+    use consair::language::SymbolType;
+    use consair::{AtomType, Value};
+
+    if let Value::Cons(cell) = expr
+        && let Value::Atom(AtomType::Symbol(SymbolType::Symbol(sym))) = &cell.car
+    {
+        let name = sym.resolve();
+        return name == "label" || name == "defmacro";
+    }
+    false
+}
+
+/// Run a file with JIT compilation enabled
+#[cfg(feature = "jit")]
+fn run_file_jit(filename: &str) -> Result<(), String> {
+    let contents = fs::read_to_string(filename)
+        .map_err(|e| format!("Failed to read file '{filename}': {e}"))?;
+
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    let jit_engine = JitEngine::new().map_err(|e| format!("Failed to initialize JIT: {e}"))?;
+
+    let mut last_result = None;
+
+    let trimmed = contents.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+
+    let mut remaining = trimmed;
+    while !remaining.trim().is_empty() {
+        let expr_result = parse_next_expr(remaining)?;
+        let (expr, rest) = expr_result;
+
+        // Definitions must use interpreter to store bindings
+        if is_definition_expr(&expr) {
+            match eval(expr, &mut env) {
+                Ok(result) => last_result = Some(format!("{result}")),
+                Err(e) => return Err(format!("Evaluation error: {e}")),
+            }
+        } else {
+            // Try JIT first, fall back to interpreter
+            match jit_engine.eval_with_env(&expr, &mut env) {
+                Ok(rv) => last_result = Some(runtime_value_to_string(rv)),
+                Err(_) => {
+                    // Fall back to interpreter for unsupported expressions
+                    match eval(expr, &mut env) {
+                        Ok(result) => last_result = Some(format!("{result}")),
+                        Err(e) => return Err(format!("Evaluation error: {e}")),
+                    }
+                }
+            }
+        }
+
+        remaining = rest;
+    }
+
+    if let Some(result) = last_result {
+        println!("{result}");
+    }
+
+    Ok(())
 }
 
 fn main() {
@@ -606,6 +677,27 @@ fn main() {
                     eprintln!("{e}");
                     process::exit(1);
                 }
+            }
+        }
+        3 => {
+            // --jit <file>
+            if args[1] == "--jit" {
+                #[cfg(feature = "jit")]
+                {
+                    if let Err(e) = run_file_jit(&args[2]) {
+                        eprintln!("{e}");
+                        process::exit(1);
+                    }
+                }
+                #[cfg(not(feature = "jit"))]
+                {
+                    eprintln!("Error: JIT feature not enabled. Rebuild with --features jit");
+                    process::exit(1);
+                }
+            } else {
+                eprintln!("Error: Invalid arguments");
+                print_usage();
+                process::exit(1);
             }
         }
         _ => {
