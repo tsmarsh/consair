@@ -15,9 +15,9 @@ pub mod jit;
 #[cfg(feature = "jit")]
 pub mod runtime;
 
-// Re-export JIT error types when JIT is enabled
+// Re-export JIT types when JIT is enabled
 #[cfg(feature = "jit")]
-pub use jit::{JitError, JitErrorKind};
+pub use jit::{CompiledExpr, JitError, JitErrorKind};
 
 // Re-export commonly used items for convenience
 pub use interpreter::{Environment, eval, expand_all_macros, expand_macros};

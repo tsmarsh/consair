@@ -424,6 +424,42 @@ pub struct CacheStats {
     pub compilations_avoided: usize,
 }
 
+/// A pre-compiled expression that can be executed multiple times efficiently.
+///
+/// This struct holds the compiled LLVM code and execution engine, allowing
+/// the same expression to be executed many times without recompilation.
+/// This is useful for benchmarking pure execution speed or when the same
+/// expression needs to be evaluated repeatedly.
+///
+/// # Example
+/// ```ignore
+/// let engine = JitEngine::new()?;
+/// let compiled = engine.compile(&expr)?;
+///
+/// // Execute multiple times without recompilation
+/// for _ in 0..1000 {
+///     let result = compiled.execute();
+/// }
+/// ```
+pub struct CompiledExpr<'ctx> {
+    /// The execution engine that owns the compiled code
+    #[allow(dead_code)]
+    execution_engine: ExecutionEngine<'ctx>,
+    /// The raw function pointer to the compiled code
+    func_ptr: ExprFn,
+}
+
+impl<'ctx> CompiledExpr<'ctx> {
+    /// Execute the pre-compiled expression.
+    ///
+    /// This is very fast as no compilation occurs - it just calls the
+    /// already-compiled native code.
+    #[inline]
+    pub fn execute(&self) -> RuntimeValue {
+        unsafe { (self.func_ptr)() }
+    }
+}
+
 /// JIT execution engine for compiling and running Consair expressions.
 pub struct JitEngine {
     /// LLVM context - must be kept alive as long as execution engine exists
@@ -549,6 +585,67 @@ impl JitEngine {
 
         // Compile and execute the expanded expression
         self.eval(&expanded)
+    }
+
+    /// Compile an expression without executing it.
+    ///
+    /// Returns a `CompiledExpr` that can be executed multiple times efficiently.
+    /// This is useful for benchmarking pure execution speed or when the same
+    /// expression needs to be evaluated repeatedly.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let engine = JitEngine::new()?;
+    /// let expr = parse("(+ 1 2 3 4 5)").unwrap();
+    /// let compiled = engine.compile(&expr)?;
+    ///
+    /// // Execute 1000 times without recompilation
+    /// for _ in 0..1000 {
+    ///     let result = compiled.execute();
+    ///     assert_eq!(result.as_int(), Some(15));
+    /// }
+    /// ```
+    pub fn compile(&self, expr: &Value) -> Result<CompiledExpr<'_>, String> {
+        // Generate unique function name
+        let counter = EXPR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let fn_name = format!("__consair_compiled_{}", counter);
+
+        // Create code generator
+        let codegen = Codegen::new(&self.context, &fn_name);
+
+        // Compile the expression into a function
+        let env = JitEnv::new();
+        let lambdas = LambdaStore::new();
+        let compiled_fns = CompiledFns::new();
+        let _compiled =
+            self.compile_expr(&codegen, expr, &fn_name, &env, &lambdas, &compiled_fns)?;
+
+        // Verify the module
+        codegen.verify()?;
+
+        // Create execution engine
+        let execution_engine = codegen
+            .module
+            .create_jit_execution_engine(OptimizationLevel::Default)
+            .map_err(|e| e.to_string())?;
+
+        // Link runtime functions
+        self.link_runtime_functions(&codegen, &execution_engine);
+
+        // Get the compiled function pointer
+        let func = unsafe {
+            execution_engine
+                .get_function::<ExprFn>(&fn_name)
+                .map_err(|e| e.to_string())?
+        };
+
+        // Extract the raw function pointer while the execution engine is still valid
+        let func_ptr = unsafe { func.as_raw() };
+
+        Ok(CompiledExpr {
+            execution_engine,
+            func_ptr,
+        })
     }
 
     /// Compile an expression into LLVM IR.

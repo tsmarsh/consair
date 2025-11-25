@@ -1018,6 +1018,93 @@ criterion_group! {
         bench_jit_macro_expansion
 }
 
+// ============================================================================
+// Pre-compiled JIT Benchmarks (compile once, execute many times)
+// These benchmarks show the pure execution speed of JIT-compiled code,
+// separating compilation overhead from execution speed.
+// ============================================================================
+
+#[cfg(feature = "jit")]
+fn bench_precompiled_simple_arithmetic(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+    let expr = parse("(+ 1 2 3 4 5)").unwrap();
+    let compiled = engine.compile(&expr).unwrap();
+
+    c.bench_function("precompiled simple arithmetic", |b| {
+        b.iter(|| black_box(compiled.execute()))
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_precompiled_nested_arithmetic(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+    let expr = parse("(+ (* 2 3) (- 10 5) (/ 20 4))").unwrap();
+    let compiled = engine.compile(&expr).unwrap();
+
+    c.bench_function("precompiled nested arithmetic", |b| {
+        b.iter(|| black_box(compiled.execute()))
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_precompiled_cons_car_cdr(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+    let expr = parse("(car (cdr (cons 1 (cons 2 (cons 3 nil)))))").unwrap();
+    let compiled = engine.compile(&expr).unwrap();
+
+    c.bench_function("precompiled cons/car/cdr", |b| {
+        b.iter(|| black_box(compiled.execute()))
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_precompiled_vector_operations(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+    let expr = parse("(vector-ref (vector 10 20 30 40 50) 2)").unwrap();
+    let compiled = engine.compile(&expr).unwrap();
+
+    c.bench_function("precompiled vector operations", |b| {
+        b.iter(|| black_box(compiled.execute()))
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_precompiled_cond_expression(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+    let expr = parse("(cond ((< 5 3) 10) ((> 5 3) 20) (t 30))").unwrap();
+    let compiled = engine.compile(&expr).unwrap();
+
+    c.bench_function("precompiled cond expression", |b| {
+        b.iter(|| black_box(compiled.execute()))
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_precompiled_comparison(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+    let expr = parse("(< (* 3 7) (+ 10 15))").unwrap();
+    let compiled = engine.compile(&expr).unwrap();
+
+    c.bench_function("precompiled comparison", |b| {
+        b.iter(|| black_box(compiled.execute()))
+    });
+}
+
+#[cfg(feature = "jit")]
+criterion_group! {
+    name = precompiled_jit_benches;
+    config = Criterion::default()
+        .sample_size(100)
+        .measurement_time(Duration::from_secs(10));
+    targets =
+        bench_precompiled_simple_arithmetic,
+        bench_precompiled_nested_arithmetic,
+        bench_precompiled_cons_car_cdr,
+        bench_precompiled_vector_operations,
+        bench_precompiled_cond_expression,
+        bench_precompiled_comparison
+}
+
 #[cfg(feature = "jit")]
 criterion_main!(
     parsing_benches,
@@ -1027,7 +1114,8 @@ criterion_main!(
     string_benches,
     recursive_benches,
     macro_benches,
-    jit_benches
+    jit_benches,
+    precompiled_jit_benches
 );
 
 #[cfg(not(feature = "jit"))]
