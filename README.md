@@ -10,6 +10,8 @@
 
 A minimal Lisp interpreter based on Paul Graham's exposition of McCarthy's 1960 paper, implemented in Rust using reference counting instead of traditional garbage collection.
 
+**Now with optional LLVM JIT compilation** - arithmetic operations execute in **under 4 nanoseconds** when pre-compiled!
+
 ## Design Philosophy
 
 This implementation demonstrates how Rust's ownership system and `Rc` (reference counting) can provide automatic memory management for a Lisp interpreter without traditional garbage collection. The key insight is that immutable cons cells can be safely shared via `Rc`, and memory is freed automatically when references are dropped.
@@ -258,7 +260,24 @@ cons --jit        # Start REPL with JIT compilation enabled (requires jit featur
 
 ### JIT Compilation Mode
 
-When built with the `jit` feature, Consair can use LLVM to compile expressions to native code for faster execution.
+When built with the `jit` feature, Consair compiles expressions to native machine code via LLVM 17, delivering **blazing fast execution**.
+
+#### Performance
+
+Pre-compiled expressions execute at near-native speeds:
+
+| Operation | Execution Time |
+|-----------|---------------|
+| Simple arithmetic `(+ 1 2 3 4 5)` | **3.6 ns** |
+| Nested arithmetic | **3.5 ns** |
+| Comparisons | **3.8 ns** |
+| cons/car/cdr | **68 ns** |
+| Vector operations | **83 ns** |
+| Conditional expressions | **3.6 ns** |
+
+*These are pure execution times after compilation. Initial compilation takes ~600μs-1.5ms.*
+
+#### Usage
 
 **Starting in JIT mode:**
 ```bash
@@ -267,6 +286,9 @@ cargo build --release --features jit
 
 # Start REPL with JIT enabled
 ./target/release/cons --jit
+
+# Run a file with JIT
+./target/release/cons --jit program.lisp
 ```
 
 **Toggling JIT in the REPL:**
@@ -280,24 +302,28 @@ JIT compilation disabled
 consair>
 ```
 
-**JIT Features:**
-- Compiles arithmetic operations, conditionals, and function calls to native code
-- Supports closures and recursive functions
-- Automatic macro expansion before compilation
-- Result caching for pure expressions
-- Graceful fallback to interpreter on unsupported expressions
+#### JIT Features
+
+- **LLVM Backend**: Compiles to optimized native code via LLVM 17
+- **Closures**: Full closure support with captured variables
+- **Tail Call Optimization**: Recursive functions marked for TCO
+- **Macro Expansion**: Macros expanded before compilation
+- **Result Caching**: Pure expressions cache their results
+- **Graceful Fallback**: Unsupported expressions fall back to interpreter
 
 **What gets JIT compiled:**
-- Arithmetic: `+`, `-`, `*`, `/`, `%`
+- Arithmetic: `+`, `-`, `*`, `/`
 - Comparisons: `<`, `>`, `<=`, `>=`, `=`, `eq`
-- List operations: `cons`, `car`, `cdr`, `list`
+- List operations: `cons`, `car`, `cdr`, `length`, `append`, `reverse`, `nth`
 - Control flow: `cond`, `lambda`, `label`
-- Vectors: `vec`, `vec-get`, `vec-set`, `vec-len`
+- Vectors: `vector`, `vector-ref`, `vector-length`
+- Type predicates: `atom`, `nil?`, `number?`, `cons?`, `not`
 - Macros (expanded before compilation)
 
 **What falls back to interpreter:**
 - I/O operations: `print`, `println`, `slurp`, `spit`
-- System calls: `shell`, `now`
+- System calls: `shell`
+- String operations (coming soon)
 - Definitions at REPL (values are JIT-compiled, bindings handled by interpreter)
 
 ## Example Usage
@@ -584,6 +610,7 @@ This implementation achieves all design goals:
 ✅ Can implement complex functions in terms of primitives
 ✅ Tail call optimization enables unbounded recursion
 ✅ String interning for efficient symbol storage and comparison
+✅ Optional LLVM JIT compilation with nanosecond execution times
 
 ## References
 

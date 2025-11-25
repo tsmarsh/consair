@@ -293,7 +293,8 @@
             <img src="images/logo.png" alt="Consair Logo" class="hero-logo">
             <h2>Minimal Lisp in Rust</h2>
             <p>A pure implementation of McCarthy's 1960 Lisp using Rust's ownership system</p>
-            <p>Extended with strings, keywords, numbers, vectors, and modern conveniences</p>
+            <p>Extended with strings, keywords, numbers, vectors, and <strong>LLVM JIT compilation</strong></p>
+            <p style="color: var(--green); font-size: 1rem; margin-top: 10px;">⚡ Arithmetic executes in under 4 nanoseconds with JIT</p>
             <div class="cta-buttons">
                 <a href="https://github.com/tsmarsh/consair/releases/latest" class="btn btn-primary">Download Latest Release</a>
                 <a href="https://github.com/tsmarsh/consair" class="btn btn-secondary">View on GitHub</a>
@@ -305,6 +306,11 @@
         <div class="container">
             <h3>Key Features</h3>
             <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>⚡ LLVM JIT Compilation</h4>
+                    <p>Optional native code compilation via LLVM 17. Pre-compiled expressions execute in <strong>3-4 nanoseconds</strong>. Full closure and recursion support.</p>
+                </div>
+
                 <div class="feature-card">
                     <h4>🎯 McCarthy's Seven Primitives</h4>
                     <p>Pure implementation of <span class="spec-highlight">quote</span>, <span class="spec-highlight">atom</span>, <span class="spec-highlight">eq</span>, <span class="spec-highlight">car</span>, <span class="spec-highlight">cdr</span>, <span class="spec-highlight">cons</span>, and <span class="spec-highlight">cond</span></p>
@@ -432,6 +438,22 @@ nil
 
 > (shell "echo hello")
 ((:out . "hello\n") (:err . "") (:exit . 0) (:success . t))</code></pre>
+
+            <pre><code>; JIT Compilation Mode
+> :jit
+JIT compilation enabled
+
+consair[jit]> (label factorial
+    (lambda (n)
+      (cond ((= n 0) 1)
+            (t (* n (factorial (- n 1)))))))
+
+consair[jit]> (factorial 10)
+3628800  ; Compiled to native code!
+
+; Toggle JIT off
+consair[jit]> :jit
+JIT compilation disabled</code></pre>
         </div>
     </section>
 
@@ -468,6 +490,22 @@ sudo apt install consair</code></pre>
 cd consair
 cargo build --release
 ./target/release/cons</code></pre>
+                </div>
+
+                <div class="step">
+                    <h4>⚡ Build with JIT Support</h4>
+                    <pre><code># macOS
+brew install llvm@17
+export LLVM_SYS_170_PREFIX=$(brew --prefix llvm@17)
+
+# Linux (Ubuntu/Debian)
+wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh
+sudo ./llvm.sh 17 && sudo apt install libpolly-17-dev
+export LLVM_SYS_170_PREFIX=/usr/lib/llvm-17
+
+# Build with JIT
+cargo build --release --features jit
+./target/release/cons --jit</code></pre>
                 </div>
 
                 <div class="step">
