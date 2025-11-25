@@ -10,6 +10,10 @@ keywords = ["lisp", "interpreter", "repl"]
 categories = ["command-line-utilities"]
 repository = "https://github.com/tsmarsh/consair"
 
+[features]
+default = []
+jit = ["consair-core/jit"]
+
 [dependencies]
 consair-core = { workspace = true }
 rustyline = "14.0"
