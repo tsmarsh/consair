@@ -521,6 +521,24 @@ impl JitEngine {
                     lambdas,
                     compiled_fns,
                 ),
+                // Vector operations
+                "vector" => self.compile_vector(codegen, args, env, lambdas, compiled_fns),
+                "vector-length" => self.compile_unary_op(
+                    codegen,
+                    args,
+                    codegen.rt_vector_length,
+                    env,
+                    lambdas,
+                    compiled_fns,
+                ),
+                "vector-ref" => self.compile_binary_op(
+                    codegen,
+                    args,
+                    codegen.rt_vector_ref,
+                    env,
+                    lambdas,
+                    compiled_fns,
+                ),
                 _ => {
                     // Check if it's a compiled function call (recursive call)
                     if let Some(func) = compiled_fns.get(sym) {
@@ -1683,6 +1701,94 @@ impl JitEngine {
         }
     }
 
+    /// Compile a vector construction.
+    fn compile_vector<'ctx>(
+        &self,
+        codegen: &Codegen<'ctx>,
+        args: &Value,
+        env: &JitEnv<'ctx>,
+        lambdas: &LambdaStore,
+        compiled_fns: &CompiledFns<'ctx>,
+    ) -> Result<inkwell::values::StructValue<'ctx>, String> {
+        let arg_values = self.collect_args(args)?;
+        let len = arg_values.len() as u32;
+
+        // If no elements, call with null pointer
+        if arg_values.is_empty() {
+            let null_ptr = codegen.ptr_type().const_null();
+            let len_val = codegen.i32_type().const_int(0, false);
+
+            let result = codegen
+                .builder
+                .build_call(
+                    codegen.rt_make_vector,
+                    &[null_ptr.into(), len_val.into()],
+                    "make_vector",
+                )
+                .map_err(|e| e.to_string())?
+                .try_as_basic_value()
+                .left()
+                .ok_or_else(|| "rt_make_vector did not return a value".to_string())?
+                .into_struct_value();
+
+            return Ok(result);
+        }
+
+        // Compile all elements
+        let mut compiled_elements = Vec::new();
+        for arg in &arg_values {
+            let compiled = self.compile_value(codegen, arg, env, lambdas, compiled_fns, false)?;
+            compiled_elements.push(compiled);
+        }
+
+        // Allocate stack space for the array
+        let array_type = codegen.value_type.array_type(len);
+        let array_ptr = codegen
+            .builder
+            .build_alloca(array_type, "vector_elements")
+            .map_err(|e| e.to_string())?;
+
+        // Store each element in the array
+        for (i, elem) in compiled_elements.iter().enumerate() {
+            let indices = [
+                codegen.context.i32_type().const_int(0, false),
+                codegen.context.i32_type().const_int(i as u64, false),
+            ];
+            let elem_ptr = unsafe {
+                codegen
+                    .builder
+                    .build_gep(array_type, array_ptr, &indices, &format!("elem_ptr_{i}"))
+                    .map_err(|e| e.to_string())?
+            };
+            codegen
+                .builder
+                .build_store(elem_ptr, *elem)
+                .map_err(|e| e.to_string())?;
+        }
+
+        // Cast to *RuntimeValue and call rt_make_vector
+        let elements_ptr = codegen
+            .builder
+            .build_pointer_cast(array_ptr, codegen.ptr_type(), "elements_ptr")
+            .map_err(|e| e.to_string())?;
+        let len_val = codegen.i32_type().const_int(len as u64, false);
+
+        let result = codegen
+            .builder
+            .build_call(
+                codegen.rt_make_vector,
+                &[elements_ptr.into(), len_val.into()],
+                "make_vector",
+            )
+            .map_err(|e| e.to_string())?
+            .try_as_basic_value()
+            .left()
+            .ok_or_else(|| "rt_make_vector did not return a value".to_string())?
+            .into_struct_value();
+
+        Ok(result)
+    }
+
     /// Compile a nullary operation (like now).
     fn compile_nullary_op<'ctx>(
         &self,
@@ -1799,6 +1905,10 @@ impl JitEngine {
         engine.add_global_mapping(&codegen.rt_append, rt_append as usize);
         engine.add_global_mapping(&codegen.rt_reverse, rt_reverse as usize);
         engine.add_global_mapping(&codegen.rt_nth, rt_nth as usize);
+        // Vector functions
+        engine.add_global_mapping(&codegen.rt_make_vector, rt_make_vector as usize);
+        engine.add_global_mapping(&codegen.rt_vector_length, rt_vector_length as usize);
+        engine.add_global_mapping(&codegen.rt_vector_ref, rt_vector_ref as usize);
     }
 }
 
@@ -2683,5 +2793,106 @@ mod tests {
         // (nth '(10 20 30) 5) => nil
         let result = engine.eval(&parse("(nth '(10 20 30) 5)").unwrap()).unwrap();
         assert!(result.is_nil());
+    }
+
+    // ========================================================================
+    // Vector Operation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_eval_vector_empty() {
+        let engine = JitEngine::new().unwrap();
+        // (vector) => empty vector
+        let result = engine.eval(&parse("(vector)").unwrap()).unwrap();
+        assert!(result.is_vector());
+    }
+
+    #[test]
+    fn test_eval_vector_with_elements() {
+        let engine = JitEngine::new().unwrap();
+        // (vector 1 2 3) => vector with 3 elements
+        let result = engine.eval(&parse("(vector 1 2 3)").unwrap()).unwrap();
+        assert!(result.is_vector());
+    }
+
+    #[test]
+    fn test_eval_vector_length_empty() {
+        let engine = JitEngine::new().unwrap();
+        // (vector-length (vector)) => 0
+        let result = engine
+            .eval(&parse("(vector-length (vector))").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(0));
+    }
+
+    #[test]
+    fn test_eval_vector_length() {
+        let engine = JitEngine::new().unwrap();
+        // (vector-length (vector 1 2 3)) => 3
+        let result = engine
+            .eval(&parse("(vector-length (vector 1 2 3))").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(3));
+    }
+
+    #[test]
+    fn test_eval_vector_ref_first() {
+        let engine = JitEngine::new().unwrap();
+        // (vector-ref (vector 10 20 30) 0) => 10
+        let result = engine
+            .eval(&parse("(vector-ref (vector 10 20 30) 0)").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(10));
+    }
+
+    #[test]
+    fn test_eval_vector_ref_middle() {
+        let engine = JitEngine::new().unwrap();
+        // (vector-ref (vector 10 20 30) 1) => 20
+        let result = engine
+            .eval(&parse("(vector-ref (vector 10 20 30) 1)").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(20));
+    }
+
+    #[test]
+    fn test_eval_vector_ref_last() {
+        let engine = JitEngine::new().unwrap();
+        // (vector-ref (vector 10 20 30) 2) => 30
+        let result = engine
+            .eval(&parse("(vector-ref (vector 10 20 30) 2)").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(30));
+    }
+
+    #[test]
+    fn test_eval_vector_ref_out_of_bounds() {
+        let engine = JitEngine::new().unwrap();
+        // (vector-ref (vector 10 20 30) 5) => nil
+        let result = engine
+            .eval(&parse("(vector-ref (vector 10 20 30) 5)").unwrap())
+            .unwrap();
+        assert!(result.is_nil());
+    }
+
+    #[test]
+    fn test_eval_vector_with_arithmetic() {
+        let engine = JitEngine::new().unwrap();
+        // (vector (+ 1 2) (* 3 4) (- 10 5)) => (3, 12, 5)
+        // (vector-ref ... 0) => 3
+        let result = engine
+            .eval(&parse("(vector-ref (vector (+ 1 2) (* 3 4) (- 10 5)) 0)").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(3));
+
+        let result = engine
+            .eval(&parse("(vector-ref (vector (+ 1 2) (* 3 4) (- 10 5)) 1)").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(12));
+
+        let result = engine
+            .eval(&parse("(vector-ref (vector (+ 1 2) (* 3 4) (- 10 5)) 2)").unwrap())
+            .unwrap();
+        assert_eq!(result.to_int(), Some(5));
     }
 }

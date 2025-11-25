@@ -57,6 +57,10 @@ pub struct Codegen<'ctx> {
     pub rt_append: FunctionValue<'ctx>,
     pub rt_reverse: FunctionValue<'ctx>,
     pub rt_nth: FunctionValue<'ctx>,
+    // Vector functions
+    pub rt_make_vector: FunctionValue<'ctx>,
+    pub rt_vector_length: FunctionValue<'ctx>,
+    pub rt_vector_ref: FunctionValue<'ctx>,
 }
 
 impl<'ctx> Codegen<'ctx> {
@@ -108,6 +112,10 @@ impl<'ctx> Codegen<'ctx> {
             rt_append: unsafe { std::mem::zeroed() },
             rt_reverse: unsafe { std::mem::zeroed() },
             rt_nth: unsafe { std::mem::zeroed() },
+            // Vector functions
+            rt_make_vector: unsafe { std::mem::zeroed() },
+            rt_vector_length: unsafe { std::mem::zeroed() },
+            rt_vector_ref: unsafe { std::mem::zeroed() },
         };
 
         // Declare all runtime functions
@@ -145,6 +153,11 @@ impl<'ctx> Codegen<'ctx> {
         codegen.rt_append = codegen.declare_binary_fn("rt_append");
         codegen.rt_reverse = codegen.declare_unary_fn("rt_reverse");
         codegen.rt_nth = codegen.declare_binary_fn("rt_nth");
+
+        // Vector functions
+        codegen.rt_make_vector = codegen.declare_make_vector_fn();
+        codegen.rt_vector_length = codegen.declare_unary_fn("rt_vector_length");
+        codegen.rt_vector_ref = codegen.declare_binary_fn("rt_vector_ref");
 
         codegen
     }
@@ -254,6 +267,23 @@ impl<'ctx> Codegen<'ctx> {
         let fn_type = i32_type.fn_type(&[self.value_type.into()], false);
         self.module.add_function(
             "rt_closure_env_size",
+            fn_type,
+            Some(inkwell::module::Linkage::External),
+        )
+    }
+
+    /// Declare rt_make_vector: (*RuntimeValue, u32) -> RuntimeValue
+    fn declare_make_vector_fn(&self) -> FunctionValue<'ctx> {
+        let ptr_type = self
+            .context
+            .i8_type()
+            .ptr_type(inkwell::AddressSpace::default());
+        let i32_type = self.context.i32_type();
+        let fn_type = self
+            .value_type
+            .fn_type(&[ptr_type.into(), i32_type.into()], false);
+        self.module.add_function(
+            "rt_make_vector",
             fn_type,
             Some(inkwell::module::Linkage::External),
         )

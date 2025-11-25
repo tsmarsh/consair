@@ -1325,6 +1325,88 @@ pub extern "C" fn rt_nth(list: RuntimeValue, index: RuntimeValue) -> RuntimeValu
 }
 
 // ============================================================================
+// Vector Runtime Functions
+// ============================================================================
+
+/// Create a vector from an array of RuntimeValues.
+///
+/// # Safety
+/// `elements` must point to a valid array of `len` RuntimeValues.
+#[unsafe(no_mangle)]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rt_make_vector(elements: *const RuntimeValue, len: u32) -> RuntimeValue {
+    let mut vec_elements: Vec<RuntimeValue> = Vec::with_capacity(len as usize);
+
+    if !elements.is_null() && len > 0 {
+        unsafe {
+            for i in 0..len as usize {
+                let val = *elements.add(i);
+                // Increment refcount for heap types
+                rt_incref(val);
+                vec_elements.push(val);
+            }
+        }
+    }
+
+    let elements_ptr = if vec_elements.is_empty() {
+        std::ptr::null_mut()
+    } else {
+        Box::into_raw(vec_elements.into_boxed_slice()) as *mut RuntimeValue
+    };
+
+    let vector = Box::new(RuntimeVector {
+        elements: elements_ptr,
+        len: len as u64,
+        refcount: AtomicU32::new(1),
+    });
+
+    unsafe { RuntimeValue::from_vector_ptr(Box::into_raw(vector)) }
+}
+
+/// Get the length of a vector.
+/// Returns 0 if the value is not a vector.
+#[unsafe(no_mangle)]
+pub extern "C" fn rt_vector_length(val: RuntimeValue) -> RuntimeValue {
+    if val.tag != TAG_VECTOR {
+        return RuntimeValue::from_int(0);
+    }
+    let ptr = val.data as *const RuntimeVector;
+    if ptr.is_null() {
+        return RuntimeValue::from_int(0);
+    }
+    RuntimeValue::from_int(unsafe { (*ptr).len as i64 })
+}
+
+/// Get an element from a vector by index.
+/// Returns nil if index is out of bounds or value is not a vector.
+#[unsafe(no_mangle)]
+pub extern "C" fn rt_vector_ref(vec: RuntimeValue, index: RuntimeValue) -> RuntimeValue {
+    if vec.tag != TAG_VECTOR {
+        return RuntimeValue::nil();
+    }
+
+    let idx = match index.to_int() {
+        Some(i) if i >= 0 => i as usize,
+        _ => return RuntimeValue::nil(),
+    };
+
+    let ptr = vec.data as *const RuntimeVector;
+    if ptr.is_null() {
+        return RuntimeValue::nil();
+    }
+
+    unsafe {
+        let vector = &*ptr;
+        if idx >= vector.len as usize || vector.elements.is_null() {
+            return RuntimeValue::nil();
+        }
+        let result = *vector.elements.add(idx);
+        rt_incref(result);
+        result
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
