@@ -251,8 +251,8 @@ impl JitEngine {
         let entry = self.context.append_basic_block(function, "entry");
         codegen.builder.position_at_end(entry);
 
-        // Compile the expression body
-        let result = self.compile_value(codegen, expr, env, lambdas, compiled_fns)?;
+        // Compile the expression body (top-level is in tail position)
+        let result = self.compile_value(codegen, expr, env, lambdas, compiled_fns, true)?;
 
         // Return the result
         codegen
@@ -264,6 +264,9 @@ impl JitEngine {
     }
 
     /// Compile a Value into LLVM IR, returning the result as a struct value.
+    ///
+    /// `tail_position` indicates whether this expression is in tail position,
+    /// which enables tail call optimization for function calls.
     fn compile_value<'ctx>(
         &self,
         codegen: &Codegen<'ctx>,
@@ -271,6 +274,7 @@ impl JitEngine {
         env: &JitEnv<'ctx>,
         lambdas: &LambdaStore,
         compiled_fns: &CompiledFns<'ctx>,
+        tail_position: bool,
     ) -> Result<inkwell::values::StructValue<'ctx>, String> {
         match value {
             Value::Nil => Ok(codegen.compile_nil()),
@@ -326,7 +330,15 @@ impl JitEngine {
 
             Value::Cons(cell) => {
                 // Try to compile as a function call
-                self.compile_call(codegen, &cell.car, &cell.cdr, env, lambdas, compiled_fns)
+                self.compile_call(
+                    codegen,
+                    &cell.car,
+                    &cell.cdr,
+                    env,
+                    lambdas,
+                    compiled_fns,
+                    tail_position,
+                )
             }
 
             Value::Vector(_) => Err("JIT vector literals not yet supported".to_string()),
@@ -340,6 +352,9 @@ impl JitEngine {
     }
 
     /// Compile a function call expression.
+    ///
+    /// `tail_position` indicates if this call is in tail position for TCO.
+    #[allow(clippy::too_many_arguments)]
     fn compile_call<'ctx>(
         &self,
         codegen: &Codegen<'ctx>,
@@ -348,6 +363,7 @@ impl JitEngine {
         env: &JitEnv<'ctx>,
         lambdas: &LambdaStore,
         compiled_fns: &CompiledFns<'ctx>,
+        tail_position: bool,
     ) -> Result<inkwell::values::StructValue<'ctx>, String> {
         // Check if operator is a symbol
         if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(sym))) = operator {
@@ -355,7 +371,9 @@ impl JitEngine {
             match sym_str.as_str() {
                 // Special forms
                 "quote" => self.compile_quote(codegen, args),
-                "cond" => self.compile_cond(codegen, args, env, lambdas, compiled_fns),
+                "cond" => {
+                    self.compile_cond(codegen, args, env, lambdas, compiled_fns, tail_position)
+                }
                 "lambda" => self.compile_closure(codegen, args, env, lambdas, compiled_fns),
                 "label" => self.compile_label(codegen, args, env, lambdas, compiled_fns),
                 // List operations
@@ -479,6 +497,7 @@ impl JitEngine {
                             env,
                             lambdas,
                             compiled_fns,
+                            tail_position,
                         );
                     }
                     // Check if it's a labeled function call (non-recursive case)
@@ -526,7 +545,9 @@ impl JitEngine {
                 }
             }
             // The operator is some other expression - compile it and call the result as a closure
-            let closure_val = self.compile_value(codegen, operator, env, lambdas, compiled_fns)?;
+            // Operator is NOT in tail position - we need to call it, not just return it
+            let closure_val =
+                self.compile_value(codegen, operator, env, lambdas, compiled_fns, false)?;
             self.compile_closure_call(codegen, closure_val, args, env, lambdas, compiled_fns)
         } else {
             Err("JIT can only call named functions or lambda expressions".to_string())
@@ -534,6 +555,9 @@ impl JitEngine {
     }
 
     /// Compile a call to a recursive function.
+    ///
+    /// `tail_position` enables tail call optimization when true.
+    #[allow(clippy::too_many_arguments)]
     fn compile_recursive_call<'ctx>(
         &self,
         codegen: &Codegen<'ctx>,
@@ -542,22 +566,30 @@ impl JitEngine {
         env: &JitEnv<'ctx>,
         lambdas: &LambdaStore,
         compiled_fns: &CompiledFns<'ctx>,
+        tail_position: bool,
     ) -> Result<inkwell::values::StructValue<'ctx>, String> {
-        // Compile each argument
+        // Compile each argument (arguments are NOT in tail position)
         let arg_values = self.collect_args(args)?;
         let compiled_args: Vec<inkwell::values::BasicMetadataValueEnum> = arg_values
             .iter()
             .map(|arg| {
-                self.compile_value(codegen, arg, env, lambdas, compiled_fns)
+                self.compile_value(codegen, arg, env, lambdas, compiled_fns, false)
                     .map(|v| v.into())
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         // Generate the call instruction
-        let result = codegen
+        let call_site = codegen
             .builder
             .build_call(func, &compiled_args, "recursive_call")
-            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+
+        // Mark as tail call if in tail position
+        if tail_position {
+            call_site.set_tail_call(true);
+        }
+
+        let result = call_site
             .try_as_basic_value()
             .left()
             .ok_or_else(|| "Recursive call did not return a value".to_string())?
@@ -660,8 +692,9 @@ impl JitEngine {
             fn_env.insert(*sym, param);
         }
 
-        // Compile the body with the new environment and compiled_fns
-        let result = self.compile_value(codegen, &body, &fn_env, lambdas, &new_compiled_fns)?;
+        // Compile the body with the new environment and compiled_fns (body is in tail position)
+        let result =
+            self.compile_value(codegen, &body, &fn_env, lambdas, &new_compiled_fns, true)?;
 
         // Return the result
         codegen
@@ -684,11 +717,11 @@ impl JitEngine {
             ));
         }
 
-        // Compile each argument
+        // Compile each argument (arguments are NOT in tail position)
         let compiled_args: Vec<inkwell::values::BasicMetadataValueEnum> = arg_values
             .iter()
             .map(|arg| {
-                self.compile_value(codegen, arg, env, lambdas, compiled_fns)
+                self.compile_value(codegen, arg, env, lambdas, compiled_fns, false)
                     .map(|v| v.into())
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -775,10 +808,10 @@ impl JitEngine {
             ));
         }
 
-        // Compile each argument
+        // Compile each argument (arguments are NOT in tail position)
         let compiled_args: Vec<inkwell::values::StructValue<'ctx>> = arg_values
             .iter()
-            .map(|arg| self.compile_value(codegen, arg, env, lambdas, compiled_fns))
+            .map(|arg| self.compile_value(codegen, arg, env, lambdas, compiled_fns, false))
             .collect::<Result<Vec<_>, _>>()?;
 
         // Create new environment with parameter bindings
@@ -787,8 +820,8 @@ impl JitEngine {
             new_env.insert(*sym, *val);
         }
 
-        // Compile the body with the new environment
-        self.compile_value(codegen, body, &new_env, lambdas, compiled_fns)
+        // Compile the body with the new environment (body IS in tail position)
+        self.compile_value(codegen, body, &new_env, lambdas, compiled_fns, true)
     }
 
     /// Compile a lambda expression into a closure value.
@@ -920,8 +953,9 @@ impl JitEngine {
             closure_env.insert(*sym, val);
         }
 
-        // Compile the body with the closure environment
-        let result = self.compile_value(codegen, body, &closure_env, lambdas, compiled_fns)?;
+        // Compile the body with the closure environment (body IS in tail position)
+        let result =
+            self.compile_value(codegen, body, &closure_env, lambdas, compiled_fns, true)?;
 
         // Return the result
         codegen
@@ -1031,11 +1065,11 @@ impl JitEngine {
         lambdas: &LambdaStore,
         compiled_fns: &CompiledFns<'ctx>,
     ) -> Result<inkwell::values::StructValue<'ctx>, String> {
-        // Compile arguments
+        // Compile arguments (arguments are NOT in tail position)
         let arg_values = self.collect_args(args)?;
         let compiled_args: Vec<inkwell::values::StructValue<'ctx>> = arg_values
             .iter()
-            .map(|arg| self.compile_value(codegen, arg, env, lambdas, compiled_fns))
+            .map(|arg| self.compile_value(codegen, arg, env, lambdas, compiled_fns, false))
             .collect::<Result<Vec<_>, _>>()?;
 
         // Allocate space for arguments on the stack
@@ -1259,12 +1293,14 @@ impl JitEngine {
             return Err("Binary operator requires at least one argument".to_string());
         }
 
-        // Compile the first argument
-        let mut result = self.compile_value(codegen, &arg_values[0], env, lambdas, compiled_fns)?;
+        // Compile the first argument (arguments to binary ops are NOT in tail position)
+        let mut result =
+            self.compile_value(codegen, &arg_values[0], env, lambdas, compiled_fns, false)?;
 
         // Apply the operation left-to-right for remaining arguments
         for arg in &arg_values[1..] {
-            let compiled_arg = self.compile_value(codegen, arg, env, lambdas, compiled_fns)?;
+            let compiled_arg =
+                self.compile_value(codegen, arg, env, lambdas, compiled_fns, false)?;
             result = codegen
                 .builder
                 .build_call(func, &[result.into(), compiled_arg.into()], "binop")
@@ -1292,9 +1328,9 @@ impl JitEngine {
         match arg_values.len() {
             0 => Err("- requires at least one argument".to_string()),
             1 => {
-                // Unary negation
+                // Unary negation (argument is NOT in tail position)
                 let compiled =
-                    self.compile_value(codegen, &arg_values[0], env, lambdas, compiled_fns)?;
+                    self.compile_value(codegen, &arg_values[0], env, lambdas, compiled_fns, false)?;
                 let result = codegen
                     .builder
                     .build_call(codegen.rt_neg, &[compiled.into()], "neg")
@@ -1313,6 +1349,9 @@ impl JitEngine {
     }
 
     /// Compile a cond expression with branching.
+    ///
+    /// `tail_position` indicates whether the cond expression itself is in tail position,
+    /// which propagates to the result expressions of each clause for TCO.
     fn compile_cond<'ctx>(
         &self,
         codegen: &Codegen<'ctx>,
@@ -1320,6 +1359,7 @@ impl JitEngine {
         env: &JitEnv<'ctx>,
         lambdas: &LambdaStore,
         compiled_fns: &CompiledFns<'ctx>,
+        tail_position: bool,
     ) -> Result<inkwell::values::StructValue<'ctx>, String> {
         let clauses = self.collect_args(args)?;
 
@@ -1366,8 +1406,15 @@ impl JitEngine {
 
             if is_final_t || i == clauses.len() - 1 {
                 // This is the final else clause - compile result and branch to merge
-                let result_val =
-                    self.compile_value(codegen, result_expr, env, lambdas, compiled_fns)?;
+                // Result expression is in tail position if the cond is
+                let result_val = self.compile_value(
+                    codegen,
+                    result_expr,
+                    env,
+                    lambdas,
+                    compiled_fns,
+                    tail_position,
+                )?;
                 let current = codegen
                     .builder
                     .get_insert_block()
@@ -1380,8 +1427,9 @@ impl JitEngine {
                 break;
             }
 
-            // Compile the test expression
-            let test_val = self.compile_value(codegen, test_expr, env, lambdas, compiled_fns)?;
+            // Compile the test expression (test is NOT in tail position)
+            let test_val =
+                self.compile_value(codegen, test_expr, env, lambdas, compiled_fns, false)?;
 
             // Check if test is truthy (not nil and not false)
             // We need to extract the tag and data from the struct
@@ -1458,10 +1506,16 @@ impl JitEngine {
                 .build_conditional_branch(is_falsy, else_block, then_block)
                 .map_err(|e| e.to_string())?;
 
-            // Compile the then block
+            // Compile the then block (result is in tail position if cond is)
             codegen.builder.position_at_end(then_block);
-            let result_val =
-                self.compile_value(codegen, result_expr, env, lambdas, compiled_fns)?;
+            let result_val = self.compile_value(
+                codegen,
+                result_expr,
+                env,
+                lambdas,
+                compiled_fns,
+                tail_position,
+            )?;
             let then_end = codegen
                 .builder
                 .get_insert_block()
@@ -1611,7 +1665,9 @@ impl JitEngine {
             return Err("Unary operator requires exactly one argument".to_string());
         }
 
-        let compiled = self.compile_value(codegen, &arg_values[0], env, lambdas, compiled_fns)?;
+        // Argument to unary op is NOT in tail position
+        let compiled =
+            self.compile_value(codegen, &arg_values[0], env, lambdas, compiled_fns, false)?;
         let result = codegen
             .builder
             .build_call(func, &[compiled.into()], "unary")
@@ -2391,5 +2447,58 @@ mod tests {
             .unwrap();
         // 5 * 5 = 25
         assert_eq!(result.to_int(), Some(25));
+    }
+
+    // ========================================================================
+    // Tail Call Optimization Tests
+    // ========================================================================
+
+    #[test]
+    fn test_eval_tail_recursive_countdown() {
+        let engine = JitEngine::new().unwrap();
+        // A tail-recursive countdown function
+        // If TCO is working, this should not overflow the stack
+        let result = engine
+            .eval(
+                &parse(
+                    "((label countdown (lambda (n) (cond ((= n 0) 0) (t (countdown (- n 1)))))) 1000)",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        assert_eq!(result.to_int(), Some(0));
+    }
+
+    #[test]
+    fn test_eval_tail_recursive_sum() {
+        let engine = JitEngine::new().unwrap();
+        // A tail-recursive sum with accumulator
+        // sum-acc(n, acc) = if n = 0 then acc else sum-acc(n-1, acc+n)
+        let result = engine
+            .eval(
+                &parse(
+                    "((label sum-acc (lambda (n acc) (cond ((= n 0) acc) (t (sum-acc (- n 1) (+ acc n)))))) 100 0)",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        // Sum of 1 to 100 = 5050
+        assert_eq!(result.to_int(), Some(5050));
+    }
+
+    #[test]
+    fn test_eval_tail_call_in_cond() {
+        let engine = JitEngine::new().unwrap();
+        // Test that tail calls are properly recognized in cond branches
+        let result = engine
+            .eval(
+                &parse(
+                    "((label fact-acc (lambda (n acc) (cond ((= n 0) acc) (t (fact-acc (- n 1) (* acc n)))))) 10 1)",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        // 10! = 3628800
+        assert_eq!(result.to_int(), Some(3628800));
     }
 }
