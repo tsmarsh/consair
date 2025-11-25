@@ -4,6 +4,9 @@ use consair::language::AtomType;
 use consair::{Environment, NumericType, Value, cons, eval, parse, register_stdlib};
 use std::time::Duration;
 
+#[cfg(feature = "jit")]
+use consair::jit::JitEngine;
+
 // ============================================================================
 // Parsing Benchmarks
 // ============================================================================
@@ -849,6 +852,202 @@ criterion_group! {
         bench_macro_complex_template
 }
 
+// ============================================================================
+// JIT Compilation Benchmarks (comparing interpreter vs JIT)
+// ============================================================================
+
+#[cfg(feature = "jit")]
+fn bench_jit_simple_arithmetic(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+
+    c.bench_function("jit simple arithmetic", |b| {
+        b.iter(|| {
+            let expr = parse("(+ 1 2 3 4 5)").unwrap();
+            black_box(engine.eval(&expr).unwrap())
+        })
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_jit_nested_arithmetic(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+
+    c.bench_function("jit nested arithmetic", |b| {
+        b.iter(|| {
+            let expr = parse("(+ (* 2 3) (- 10 5) (/ 20 4))").unwrap();
+            black_box(engine.eval(&expr).unwrap())
+        })
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_jit_lambda_invocation(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+
+    c.bench_function("jit lambda invocation", |b| {
+        b.iter(|| {
+            let expr = parse("((lambda (x) (+ x 1)) 42)").unwrap();
+            black_box(engine.eval(&expr).unwrap())
+        })
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_jit_recursive_factorial(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+
+    c.bench_function("jit recursive factorial(10)", |b| {
+        b.iter(|| {
+            let expr = parse(
+                r#"
+                (label factorial (lambda (n)
+                    (cond
+                        ((= n 0) 1)
+                        (t (* n (factorial (- n 1)))))))
+                (factorial 10)
+                "#,
+            )
+            .unwrap();
+            black_box(engine.eval(&expr).unwrap())
+        })
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_jit_recursive_fibonacci(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+
+    c.bench_function("jit recursive fibonacci(10)", |b| {
+        b.iter(|| {
+            let expr = parse(
+                r#"
+                (label fib (lambda (n)
+                    (cond
+                        ((= n 0) 0)
+                        ((= n 1) 1)
+                        (t (+ (fib (- n 1)) (fib (- n 2)))))))
+                (fib 10)
+                "#,
+            )
+            .unwrap();
+            black_box(engine.eval(&expr).unwrap())
+        })
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_jit_cons_car_cdr(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+
+    c.bench_function("jit cons/car/cdr", |b| {
+        b.iter(|| {
+            let expr = parse("(car (cdr (cons 1 (cons 2 (cons 3 nil)))))").unwrap();
+            black_box(engine.eval(&expr).unwrap())
+        })
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_jit_cond_expression(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+
+    c.bench_function("jit cond expression", |b| {
+        b.iter(|| {
+            let expr = parse("(cond ((< 5 3) 10) ((> 5 3) 20) (t 30))").unwrap();
+            black_box(engine.eval(&expr).unwrap())
+        })
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_jit_closure(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+
+    c.bench_function("jit closure", |b| {
+        b.iter(|| {
+            let expr = parse("(((lambda (x) (lambda (y) (+ x y))) 10) 20)").unwrap();
+            black_box(engine.eval(&expr).unwrap())
+        })
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_jit_vector_operations(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+
+    c.bench_function("jit vector operations", |b| {
+        b.iter(|| {
+            let expr = parse("(vector-ref (vector 10 20 30 40 50) 2)").unwrap();
+            black_box(engine.eval(&expr).unwrap())
+        })
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_jit_cache_hit(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+
+    // Prime the cache
+    let expr = parse("(+ 1 2 3 4 5)").unwrap();
+    engine.eval(&expr).unwrap();
+
+    c.bench_function("jit cache hit (repeated expr)", |b| {
+        b.iter(|| black_box(engine.eval(&expr).unwrap()))
+    });
+}
+
+#[cfg(feature = "jit")]
+fn bench_jit_macro_expansion(c: &mut Criterion) {
+    let engine = JitEngine::new().unwrap();
+    let mut env = Environment::new();
+    register_stdlib(&mut env);
+
+    // Define a macro
+    let setup =
+        parse("(defmacro when (condition body) `(cond (,condition ,body) (t nil)))").unwrap();
+    eval(setup, &mut env).unwrap();
+
+    c.bench_function("jit macro expansion", |b| {
+        b.iter(|| {
+            let expr = parse("(when t (+ 1 2 3))").unwrap();
+            black_box(engine.eval_with_env(&expr, &mut env.clone()).unwrap())
+        })
+    });
+}
+
+#[cfg(feature = "jit")]
+criterion_group! {
+    name = jit_benches;
+    config = Criterion::default()
+        .sample_size(100)
+        .measurement_time(Duration::from_secs(10));
+    targets =
+        bench_jit_simple_arithmetic,
+        bench_jit_nested_arithmetic,
+        bench_jit_lambda_invocation,
+        bench_jit_recursive_factorial,
+        bench_jit_recursive_fibonacci,
+        bench_jit_cons_car_cdr,
+        bench_jit_cond_expression,
+        bench_jit_closure,
+        bench_jit_vector_operations,
+        bench_jit_cache_hit,
+        bench_jit_macro_expansion
+}
+
+#[cfg(feature = "jit")]
+criterion_main!(
+    parsing_benches,
+    eval_benches,
+    numeric_benches,
+    list_benches,
+    string_benches,
+    recursive_benches,
+    macro_benches,
+    jit_benches
+);
+
+#[cfg(not(feature = "jit"))]
 criterion_main!(
     parsing_benches,
     eval_benches,

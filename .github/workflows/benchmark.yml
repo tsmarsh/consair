@@ -19,14 +19,21 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install LLVM 17
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+          echo "LLVM_SYS_170_PREFIX=/usr/lib/llvm-17" >> $GITHUB_ENV
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-codspeed
         run: cargo install cargo-codspeed
 
-      - name: Build benchmarks
-        run: cargo codspeed build
+      - name: Build benchmarks (with JIT)
+        run: cargo codspeed build --features jit
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v4
