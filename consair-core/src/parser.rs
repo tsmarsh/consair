@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+#[cfg(feature = "persistent")]
+use im::Vector as ImVector;
+
 use crate::interner::InternedSymbol;
 use crate::language::{AtomType, SymbolType, Value, VectorValue, cons};
 use crate::lexer::{Lexer, Token};
@@ -112,10 +115,10 @@ impl<'a> Parser<'a> {
             }
             Token::VectorOpen => {
                 self.advance()?;
-                let mut elements = Vec::new();
+                let mut vec_elements = Vec::new();
 
                 while !matches!(self.current_token, Token::VectorClose | Token::Eof) {
-                    elements.push(self.parse_expression()?);
+                    vec_elements.push(self.parse_expression()?);
                 }
 
                 if matches!(self.current_token, Token::Eof) {
@@ -124,6 +127,10 @@ impl<'a> Parser<'a> {
 
                 self.advance()?; // consume >>
 
+                #[cfg(not(feature = "persistent"))]
+                let elements = vec_elements;
+                #[cfg(feature = "persistent")]
+                let elements = ImVector::from(vec_elements);
                 Ok(Value::Vector(Arc::new(VectorValue { elements })))
             }
             Token::RParen => Err("Unexpected )".to_string()),

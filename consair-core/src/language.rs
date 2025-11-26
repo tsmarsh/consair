@@ -2,7 +2,11 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+#[cfg(not(feature = "persistent"))]
 use rustc_hash::{FxHashMap, FxHashSet};
+
+#[cfg(feature = "persistent")]
+use im::{HashMap as ImHashMap, HashSet as ImHashSet, Vector as ImVector};
 
 use crate::interner::InternedSymbol;
 use crate::interpreter::Environment;
@@ -129,25 +133,57 @@ impl PartialEq for MacroCell {
     }
 }
 
+/// Vector value - uses Vec or im::Vector depending on feature
+#[cfg(not(feature = "persistent"))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VectorValue {
     pub elements: Vec<Value>,
 }
 
-/// Map value - fast hash map using FxHash
+#[cfg(feature = "persistent")]
+#[derive(Clone, Debug)]
+pub struct VectorValue {
+    pub elements: ImVector<Value>,
+}
+
+#[cfg(feature = "persistent")]
+impl PartialEq for VectorValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.elements == other.elements
+    }
+}
+
+#[cfg(feature = "persistent")]
+impl Eq for VectorValue {}
+
+#[cfg(feature = "persistent")]
+impl Hash for VectorValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_usize(self.elements.len());
+        for elem in &self.elements {
+            elem.hash(state);
+        }
+    }
+}
+
+/// Map value - fast hash map using FxHash or im::HashMap depending on feature
+#[cfg(not(feature = "persistent"))]
 #[derive(Clone, Debug)]
 pub struct MapValue {
     pub entries: FxHashMap<Value, Value>,
 }
 
+#[cfg(not(feature = "persistent"))]
 impl PartialEq for MapValue {
     fn eq(&self, other: &Self) -> bool {
         self.entries == other.entries
     }
 }
 
+#[cfg(not(feature = "persistent"))]
 impl Eq for MapValue {}
 
+#[cfg(not(feature = "persistent"))]
 impl Hash for MapValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // Hash by sorting keys for deterministic ordering
@@ -164,20 +200,83 @@ impl Hash for MapValue {
     }
 }
 
-/// Set value - fast hash set using FxHash
+#[cfg(feature = "persistent")]
+#[derive(Clone, Debug)]
+pub struct MapValue {
+    pub entries: ImHashMap<Value, Value>,
+}
+
+#[cfg(feature = "persistent")]
+impl PartialEq for MapValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.entries == other.entries
+    }
+}
+
+#[cfg(feature = "persistent")]
+impl Eq for MapValue {}
+
+#[cfg(feature = "persistent")]
+impl Hash for MapValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Hash by sorting keys for deterministic ordering
+        let mut pairs: Vec<_> = self.entries.iter().collect();
+        pairs.sort_by(|(k1, _), (k2, _)| format!("{k1}").cmp(&format!("{k2}")));
+        state.write_usize(pairs.len());
+        for (k, v) in pairs {
+            k.hash(state);
+            v.hash(state);
+        }
+    }
+}
+
+/// Set value - fast hash set using FxHash or im::HashSet depending on feature
+#[cfg(not(feature = "persistent"))]
 #[derive(Clone, Debug)]
 pub struct SetValue {
     pub elements: FxHashSet<Value>,
 }
 
+#[cfg(not(feature = "persistent"))]
 impl PartialEq for SetValue {
     fn eq(&self, other: &Self) -> bool {
         self.elements == other.elements
     }
 }
 
+#[cfg(not(feature = "persistent"))]
 impl Eq for SetValue {}
 
+#[cfg(not(feature = "persistent"))]
+impl Hash for SetValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Hash by sorting elements for deterministic ordering
+        let mut elems: Vec<_> = self.elements.iter().collect();
+        elems.sort_by(|a, b| format!("{a}").cmp(&format!("{b}")));
+        state.write_usize(elems.len());
+        for e in elems {
+            e.hash(state);
+        }
+    }
+}
+
+#[cfg(feature = "persistent")]
+#[derive(Clone, Debug)]
+pub struct SetValue {
+    pub elements: ImHashSet<Value>,
+}
+
+#[cfg(feature = "persistent")]
+impl PartialEq for SetValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.elements == other.elements
+    }
+}
+
+#[cfg(feature = "persistent")]
+impl Eq for SetValue {}
+
+#[cfg(feature = "persistent")]
 impl Hash for SetValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // Hash by sorting elements for deterministic ordering

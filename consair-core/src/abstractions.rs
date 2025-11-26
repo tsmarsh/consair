@@ -11,7 +11,11 @@
 
 use std::sync::Arc;
 
+#[cfg(not(feature = "persistent"))]
 use rustc_hash::{FxHashMap, FxHashSet};
+
+#[cfg(feature = "persistent")]
+use im::{HashMap as ImHashMap, HashSet as ImHashSet, Vector as ImVector};
 
 use crate::language::{
     AtomType, ConsCell, MapValue, SetValue, StringType, SymbolType, Value, VectorValue, cons,
@@ -51,9 +55,11 @@ impl Seq {
             Seq::MapSeq { entries, index } => {
                 if let Some((k, v)) = entries.get(*index) {
                     // Return as a two-element vector [key value]
-                    Value::Vector(Arc::new(VectorValue {
-                        elements: vec![k.clone(), v.clone()],
-                    }))
+                    #[cfg(not(feature = "persistent"))]
+                    let elements = vec![k.clone(), v.clone()];
+                    #[cfg(feature = "persistent")]
+                    let elements = ImVector::from(vec![k.clone(), v.clone()]);
+                    Value::Vector(Arc::new(VectorValue { elements }))
                 } else {
                     Value::Nil
                 }
@@ -331,25 +337,51 @@ pub fn get(coll: &Value, key: &Value, default_val: Option<&Value>) -> Value {
 pub fn assoc(coll: &Value, key: Value, val: Value) -> Result<Value, String> {
     match coll {
         Value::Map(map) => {
-            let mut new_entries = map.entries.clone();
-            new_entries.insert(key, val);
-            Ok(Value::Map(Arc::new(MapValue {
-                entries: new_entries,
-            })))
+            #[cfg(not(feature = "persistent"))]
+            {
+                let mut new_entries = map.entries.clone();
+                new_entries.insert(key, val);
+                Ok(Value::Map(Arc::new(MapValue {
+                    entries: new_entries,
+                })))
+            }
+            #[cfg(feature = "persistent")]
+            {
+                let new_entries = map.entries.update(key, val);
+                Ok(Value::Map(Arc::new(MapValue {
+                    entries: new_entries,
+                })))
+            }
         }
         Value::Vector(vec) => {
             if let Value::Atom(AtomType::Number(NumericType::Int(idx))) = &key {
                 let idx = *idx as usize;
                 if idx <= vec.elements.len() {
-                    let mut new_elements = vec.elements.clone();
-                    if idx == vec.elements.len() {
-                        new_elements.push(val);
-                    } else {
-                        new_elements[idx] = val;
+                    #[cfg(not(feature = "persistent"))]
+                    {
+                        let mut new_elements = vec.elements.clone();
+                        if idx == vec.elements.len() {
+                            new_elements.push(val);
+                        } else {
+                            new_elements[idx] = val;
+                        }
+                        Ok(Value::Vector(Arc::new(VectorValue {
+                            elements: new_elements,
+                        })))
                     }
-                    Ok(Value::Vector(Arc::new(VectorValue {
-                        elements: new_elements,
-                    })))
+                    #[cfg(feature = "persistent")]
+                    {
+                        let new_elements = if idx == vec.elements.len() {
+                            let mut v = vec.elements.clone();
+                            v.push_back(val);
+                            v
+                        } else {
+                            vec.elements.update(idx, val)
+                        };
+                        Ok(Value::Vector(Arc::new(VectorValue {
+                            elements: new_elements,
+                        })))
+                    }
                 } else {
                     Err(format!(
                         "Index {} out of bounds for vector of length {}",
@@ -363,9 +395,17 @@ pub fn assoc(coll: &Value, key: Value, val: Value) -> Result<Value, String> {
         }
         Value::Nil => {
             // Assoc on nil creates a new map
-            let mut entries = FxHashMap::default();
-            entries.insert(key, val);
-            Ok(Value::Map(Arc::new(MapValue { entries })))
+            #[cfg(not(feature = "persistent"))]
+            {
+                let mut entries = FxHashMap::default();
+                entries.insert(key, val);
+                Ok(Value::Map(Arc::new(MapValue { entries })))
+            }
+            #[cfg(feature = "persistent")]
+            {
+                let entries = ImHashMap::unit(key, val);
+                Ok(Value::Map(Arc::new(MapValue { entries })))
+            }
         }
         _ => Err(format!("Cannot assoc on {}", coll)),
     }
@@ -393,39 +433,73 @@ pub fn conj(coll: &Value, item: Value) -> Result<Value, String> {
         }
         Value::Vector(vec) => {
             // Add at end
-            let mut new_elements = vec.elements.clone();
-            new_elements.push(item);
-            Ok(Value::Vector(Arc::new(VectorValue {
-                elements: new_elements,
-            })))
+            #[cfg(not(feature = "persistent"))]
+            {
+                let mut new_elements = vec.elements.clone();
+                new_elements.push(item);
+                Ok(Value::Vector(Arc::new(VectorValue {
+                    elements: new_elements,
+                })))
+            }
+            #[cfg(feature = "persistent")]
+            {
+                let mut new_elements = vec.elements.clone();
+                new_elements.push_back(item);
+                Ok(Value::Vector(Arc::new(VectorValue {
+                    elements: new_elements,
+                })))
+            }
         }
         Value::Set(set) => {
-            let mut new_elements = set.elements.clone();
-            new_elements.insert(item);
-            Ok(Value::Set(Arc::new(SetValue {
-                elements: new_elements,
-            })))
+            #[cfg(not(feature = "persistent"))]
+            {
+                let mut new_elements = set.elements.clone();
+                new_elements.insert(item);
+                Ok(Value::Set(Arc::new(SetValue {
+                    elements: new_elements,
+                })))
+            }
+            #[cfg(feature = "persistent")]
+            {
+                let new_elements = set.elements.update(item);
+                Ok(Value::Set(Arc::new(SetValue {
+                    elements: new_elements,
+                })))
+            }
         }
         Value::Map(map) => {
             // Expect item to be a [key value] vector or (key . value) cons
+            #[cfg(not(feature = "persistent"))]
+            fn insert_map_entry(map: &MapValue, key: Value, val: Value) -> MapValue {
+                let mut new_entries = map.entries.clone();
+                new_entries.insert(key, val);
+                MapValue {
+                    entries: new_entries,
+                }
+            }
+            #[cfg(feature = "persistent")]
+            fn insert_map_entry(map: &MapValue, key: Value, val: Value) -> MapValue {
+                let new_entries = map.entries.update(key, val);
+                MapValue {
+                    entries: new_entries,
+                }
+            }
+
             match &item {
                 Value::Vector(pair) if pair.elements.len() == 2 => {
-                    let key = pair.elements[0].clone();
-                    let val = pair.elements[1].clone();
-                    let mut new_entries = map.entries.clone();
-                    new_entries.insert(key, val);
-                    Ok(Value::Map(Arc::new(MapValue {
-                        entries: new_entries,
-                    })))
+                    #[cfg(not(feature = "persistent"))]
+                    let (key, val) = (pair.elements[0].clone(), pair.elements[1].clone());
+                    #[cfg(feature = "persistent")]
+                    let (key, val) = (
+                        pair.elements.get(0).cloned().unwrap(),
+                        pair.elements.get(1).cloned().unwrap(),
+                    );
+                    Ok(Value::Map(Arc::new(insert_map_entry(map, key, val))))
                 }
                 Value::Cons(pair) => {
                     let key = pair.car.clone();
                     let val = pair.cdr.clone();
-                    let mut new_entries = map.entries.clone();
-                    new_entries.insert(key, val);
-                    Ok(Value::Map(Arc::new(MapValue {
-                        entries: new_entries,
-                    })))
+                    Ok(Value::Map(Arc::new(insert_map_entry(map, key, val))))
                 }
                 _ => Err("Map conj expects [key value] vector or (key . value) pair".to_string()),
             }
@@ -461,13 +535,22 @@ pub fn unreduced(value: &Value) -> Value {
 // ============================================================================
 
 /// Create an empty map.
+#[cfg(not(feature = "persistent"))]
 pub fn empty_map() -> Value {
     Value::Map(Arc::new(MapValue {
         entries: FxHashMap::default(),
     }))
 }
 
+#[cfg(feature = "persistent")]
+pub fn empty_map() -> Value {
+    Value::Map(Arc::new(MapValue {
+        entries: ImHashMap::new(),
+    }))
+}
+
 /// Create a map from key-value pairs.
+#[cfg(not(feature = "persistent"))]
 pub fn hash_map(pairs: Vec<(Value, Value)>) -> Value {
     let mut entries = FxHashMap::default();
     for (k, v) in pairs {
@@ -476,16 +559,37 @@ pub fn hash_map(pairs: Vec<(Value, Value)>) -> Value {
     Value::Map(Arc::new(MapValue { entries }))
 }
 
+#[cfg(feature = "persistent")]
+pub fn hash_map(pairs: Vec<(Value, Value)>) -> Value {
+    let entries: ImHashMap<Value, Value> = pairs.into_iter().collect();
+    Value::Map(Arc::new(MapValue { entries }))
+}
+
 /// Create an empty set.
+#[cfg(not(feature = "persistent"))]
 pub fn empty_set() -> Value {
     Value::Set(Arc::new(SetValue {
         elements: FxHashSet::default(),
     }))
 }
 
+#[cfg(feature = "persistent")]
+pub fn empty_set() -> Value {
+    Value::Set(Arc::new(SetValue {
+        elements: ImHashSet::new(),
+    }))
+}
+
 /// Create a set from elements.
+#[cfg(not(feature = "persistent"))]
 pub fn hash_set(elements: Vec<Value>) -> Value {
     let elems: FxHashSet<Value> = elements.into_iter().collect();
+    Value::Set(Arc::new(SetValue { elements: elems }))
+}
+
+#[cfg(feature = "persistent")]
+pub fn hash_set(elements: Vec<Value>) -> Value {
+    let elems: ImHashSet<Value> = elements.into_iter().collect();
     Value::Set(Arc::new(SetValue { elements: elems }))
 }
 
@@ -523,6 +627,14 @@ mod tests {
         Value::Atom(AtomType::String(StringType::Basic(s.to_string())))
     }
 
+    fn make_vector(elements: Vec<Value>) -> Value {
+        #[cfg(not(feature = "persistent"))]
+        let elems = elements;
+        #[cfg(feature = "persistent")]
+        let elems = ImVector::from(elements);
+        Value::Vector(Arc::new(VectorValue { elements: elems }))
+    }
+
     #[test]
     fn test_seq_list() {
         let list = cons(
@@ -540,9 +652,7 @@ mod tests {
 
     #[test]
     fn test_seq_vector() {
-        let vec = Value::Vector(Arc::new(VectorValue {
-            elements: vec![make_int(1), make_int(2), make_int(3)],
-        }));
+        let vec = make_vector(vec![make_int(1), make_int(2), make_int(3)]);
         let s = seq(&vec).unwrap();
         assert_eq!(s.first(), make_int(1));
         let s2 = s.next().unwrap();
@@ -554,9 +664,7 @@ mod tests {
         let list = cons(make_int(1), cons(make_int(2), Value::Nil));
         assert_eq!(count(&list), Some(2));
 
-        let vec = Value::Vector(Arc::new(VectorValue {
-            elements: vec![make_int(1), make_int(2), make_int(3)],
-        }));
+        let vec = make_vector(vec![make_int(1), make_int(2), make_int(3)]);
         assert_eq!(count(&vec), Some(3));
 
         assert_eq!(count(&Value::Nil), Some(0));
@@ -564,9 +672,7 @@ mod tests {
 
     #[test]
     fn test_nth() {
-        let vec = Value::Vector(Arc::new(VectorValue {
-            elements: vec![make_int(10), make_int(20), make_int(30)],
-        }));
+        let vec = make_vector(vec![make_int(10), make_int(20), make_int(30)]);
         assert_eq!(nth(&vec, 0, None), make_int(10));
         assert_eq!(nth(&vec, 1, None), make_int(20));
         assert_eq!(nth(&vec, 2, None), make_int(30));
@@ -586,9 +692,7 @@ mod tests {
 
     #[test]
     fn test_get_vector() {
-        let vec = Value::Vector(Arc::new(VectorValue {
-            elements: vec![make_int(10), make_int(20)],
-        }));
+        let vec = make_vector(vec![make_int(10), make_int(20)]);
         assert_eq!(get(&vec, &make_int(0), None), make_int(10));
         assert_eq!(get(&vec, &make_int(1), None), make_int(20));
     }
@@ -602,9 +706,7 @@ mod tests {
 
     #[test]
     fn test_assoc_vector() {
-        let vec = Value::Vector(Arc::new(VectorValue {
-            elements: vec![make_int(1), make_int(2)],
-        }));
+        let vec = make_vector(vec![make_int(1), make_int(2)]);
         let vec2 = assoc(&vec, make_int(0), make_int(10)).unwrap();
         assert_eq!(nth(&vec2, 0, None), make_int(10));
         assert_eq!(nth(&vec2, 1, None), make_int(2));
@@ -620,9 +722,7 @@ mod tests {
 
     #[test]
     fn test_conj_vector() {
-        let vec = Value::Vector(Arc::new(VectorValue {
-            elements: vec![make_int(1), make_int(2)],
-        }));
+        let vec = make_vector(vec![make_int(1), make_int(2)]);
         let vec2 = conj(&vec, make_int(3)).unwrap();
         // Vector conj adds at end
         assert_eq!(nth(&vec2, 2, None), make_int(3));

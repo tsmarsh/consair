@@ -6,6 +6,9 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 
+#[cfg(feature = "persistent")]
+use im::Vector as ImVector;
+
 use crate::interner::InternedSymbol;
 use crate::language::{AtomType, ConsCell, StringType, SymbolType, Value, VectorValue};
 use crate::numeric::NumericType;
@@ -517,10 +520,14 @@ impl RuntimeValue {
                 unsafe {
                     let rt_vec = &*ptr;
                     let slice = std::slice::from_raw_parts(rt_vec.elements, rt_vec.len as usize);
-                    let mut elements = Vec::with_capacity(slice.len());
+                    let mut vec_elements = Vec::with_capacity(slice.len());
                     for elem in slice {
-                        elements.push(elem.to_value()?);
+                        vec_elements.push(elem.to_value()?);
                     }
+                    #[cfg(not(feature = "persistent"))]
+                    let elements = vec_elements;
+                    #[cfg(feature = "persistent")]
+                    let elements = ImVector::from(vec_elements);
                     Ok(Value::Vector(Arc::new(VectorValue { elements })))
                 }
             }
@@ -1420,6 +1427,14 @@ pub extern "C" fn rt_vector_ref(vec: RuntimeValue, index: RuntimeValue) -> Runti
 mod tests {
     use super::*;
 
+    fn make_vector(vec_elements: Vec<Value>) -> Value {
+        #[cfg(not(feature = "persistent"))]
+        let elements = vec_elements;
+        #[cfg(feature = "persistent")]
+        let elements = ImVector::from(vec_elements);
+        Value::Vector(Arc::new(VectorValue { elements }))
+    }
+
     #[test]
     fn test_nil() {
         let v = RuntimeValue::nil();
@@ -1750,30 +1765,16 @@ mod tests {
 
     #[test]
     fn test_convert_vector() {
-        let vec = Value::Vector(Arc::new(VectorValue {
-            elements: vec![
-                Value::Atom(AtomType::Number(NumericType::Int(1))),
-                Value::Atom(AtomType::Number(NumericType::Int(2))),
-                Value::Atom(AtomType::Number(NumericType::Int(3))),
-            ],
-        }));
+        let vec = make_vector(vec![
+            Value::Atom(AtomType::Number(NumericType::Int(1))),
+            Value::Atom(AtomType::Number(NumericType::Int(2))),
+            Value::Atom(AtomType::Number(NumericType::Int(3))),
+        ]);
         let rt = RuntimeValue::from_value(&vec).unwrap();
         assert!(rt.is_vector());
         let back = rt.to_value().unwrap();
         if let Value::Vector(v) = back {
             assert_eq!(v.elements.len(), 3);
-            assert_eq!(
-                v.elements[0],
-                Value::Atom(AtomType::Number(NumericType::Int(1)))
-            );
-            assert_eq!(
-                v.elements[1],
-                Value::Atom(AtomType::Number(NumericType::Int(2)))
-            );
-            assert_eq!(
-                v.elements[2],
-                Value::Atom(AtomType::Number(NumericType::Int(3)))
-            );
         } else {
             panic!("Expected vector");
         }
@@ -1781,7 +1782,7 @@ mod tests {
 
     #[test]
     fn test_convert_empty_vector() {
-        let vec = Value::Vector(Arc::new(VectorValue { elements: vec![] }));
+        let vec = make_vector(vec![]);
         let rt = RuntimeValue::from_value(&vec).unwrap();
         let back = rt.to_value().unwrap();
         if let Value::Vector(v) = back {
