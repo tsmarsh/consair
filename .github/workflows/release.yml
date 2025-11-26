@@ -26,8 +26,8 @@ jobs:
           draft: false
           prerelease: false
 
-  build-and-upload:
-    name: Build and Upload
+  build-cons:
+    name: Build cons
     needs: create-release
     runs-on: ${{ matrix.os }}
     strategy:
@@ -47,7 +47,7 @@ jobs:
             cross: true
 
           # macOS x86_64
-          - os: macos-latest
+          - os: macos-13
             target: x86_64-apple-darwin
             binary_name: cons
             asset_name: cons-macos-x86_64
@@ -86,6 +86,69 @@ jobs:
 
       - name: Strip binary (Linux/macOS)
         if: matrix.os != 'windows-latest'
+        run: strip target/${{ matrix.target }}/release/${{ matrix.binary_name }}
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./target/${{ matrix.target }}/release/${{ matrix.binary_name }}
+          asset_name: ${{ matrix.asset_name }}
+          asset_content_type: application/octet-stream
+
+  build-cadr:
+    name: Build cadr (AOT compiler)
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # Linux x86_64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_name: cadr
+            asset_name: cadr-linux-x86_64
+
+          # macOS x86_64
+          - os: macos-13
+            target: x86_64-apple-darwin
+            binary_name: cadr
+            asset_name: cadr-macos-x86_64
+
+          # macOS ARM64 (Apple Silicon)
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: cadr
+            asset_name: cadr-macos-aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+          echo "LLVM_SYS_170_PREFIX=/usr/lib/llvm-17" >> $GITHUB_ENV
+
+      - name: Install LLVM (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install llvm@17
+          echo "LLVM_SYS_170_PREFIX=$(brew --prefix llvm@17)" >> $GITHUB_ENV
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build cadr
+        run: cargo build --release --target ${{ matrix.target }} -p cadr
+
+      - name: Strip binary
         run: strip target/${{ matrix.target }}/release/${{ matrix.binary_name }}
 
       - name: Upload Release Asset
