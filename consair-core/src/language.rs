@@ -1,7 +1,8 @@
-use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::interner::InternedSymbol;
 use crate::interpreter::Environment;
@@ -133,10 +134,10 @@ pub struct VectorValue {
     pub elements: Vec<Value>,
 }
 
-/// Map value - persistent hash map
+/// Map value - fast hash map using FxHash
 #[derive(Clone, Debug)]
 pub struct MapValue {
-    pub entries: HashMap<Value, Value>,
+    pub entries: FxHashMap<Value, Value>,
 }
 
 impl PartialEq for MapValue {
@@ -163,10 +164,10 @@ impl Hash for MapValue {
     }
 }
 
-/// Set value - persistent hash set
+/// Set value - fast hash set using FxHash
 #[derive(Clone, Debug)]
 pub struct SetValue {
-    pub elements: HashSet<Value>,
+    pub elements: FxHashSet<Value>,
 }
 
 impl PartialEq for SetValue {

@@ -4,13 +4,14 @@
 //! enabling uniform operations across different data types. These abstractions are
 //! engine-level and dialect-agnostic.
 
-// Value types can be used as HashMap/HashSet keys. While Value contains Arc<LambdaCell>
+// Value types can be used as FxHashMap/FxHashSet keys. While Value contains Arc<LambdaCell>
 // which has interior mutability, lambdas as keys is an unusual use case and the Hash/Eq
 // implementations are based on structural equality, not runtime state.
 #![allow(clippy::mutable_key_type)]
 
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::language::{
     AtomType, ConsCell, MapValue, SetValue, StringType, SymbolType, Value, VectorValue, cons,
@@ -362,7 +363,7 @@ pub fn assoc(coll: &Value, key: Value, val: Value) -> Result<Value, String> {
         }
         Value::Nil => {
             // Assoc on nil creates a new map
-            let mut entries = HashMap::new();
+            let mut entries = FxHashMap::default();
             entries.insert(key, val);
             Ok(Value::Map(Arc::new(MapValue { entries })))
         }
@@ -462,13 +463,13 @@ pub fn unreduced(value: &Value) -> Value {
 /// Create an empty map.
 pub fn empty_map() -> Value {
     Value::Map(Arc::new(MapValue {
-        entries: HashMap::new(),
+        entries: FxHashMap::default(),
     }))
 }
 
 /// Create a map from key-value pairs.
 pub fn hash_map(pairs: Vec<(Value, Value)>) -> Value {
-    let mut entries = HashMap::new();
+    let mut entries = FxHashMap::default();
     for (k, v) in pairs {
         entries.insert(k, v);
     }
@@ -478,13 +479,13 @@ pub fn hash_map(pairs: Vec<(Value, Value)>) -> Value {
 /// Create an empty set.
 pub fn empty_set() -> Value {
     Value::Set(Arc::new(SetValue {
-        elements: HashSet::new(),
+        elements: FxHashSet::default(),
     }))
 }
 
 /// Create a set from elements.
 pub fn hash_set(elements: Vec<Value>) -> Value {
-    let elems: HashSet<Value> = elements.into_iter().collect();
+    let elems: FxHashSet<Value> = elements.into_iter().collect();
     Value::Set(Arc::new(SetValue { elements: elems }))
 }
 
