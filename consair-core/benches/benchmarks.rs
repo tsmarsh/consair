@@ -1,11 +1,9 @@
 use codspeed_criterion_compat::{Criterion, black_box, criterion_group, criterion_main};
 use consair::interner::InternedSymbol;
+use consair::jit::JitEngine;
 use consair::language::AtomType;
 use consair::{Environment, NumericType, Value, cons, eval, parse, register_stdlib};
 use std::time::Duration;
-
-#[cfg(feature = "jit")]
-use consair::jit::JitEngine;
 
 // ============================================================================
 // Parsing Benchmarks
@@ -856,7 +854,6 @@ criterion_group! {
 // JIT Compilation Benchmarks (comparing interpreter vs JIT)
 // ============================================================================
 
-#[cfg(feature = "jit")]
 fn bench_jit_simple_arithmetic(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(+ 1 2 3 4 5)").unwrap();
@@ -866,7 +863,6 @@ fn bench_jit_simple_arithmetic(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_jit_nested_arithmetic(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(+ (* 2 3) (- 10 5) (/ 20 4))").unwrap();
@@ -876,7 +872,6 @@ fn bench_jit_nested_arithmetic(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_jit_lambda_invocation(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("((lambda (x) (+ x 1)) 42)").unwrap();
@@ -886,7 +881,6 @@ fn bench_jit_lambda_invocation(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_jit_recursive_factorial(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     // Note: label + call in single expression - JIT compiles the whole thing
@@ -906,7 +900,6 @@ fn bench_jit_recursive_factorial(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_jit_recursive_fibonacci(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     // Note: label + call in single expression - JIT compiles the whole thing
@@ -927,7 +920,6 @@ fn bench_jit_recursive_fibonacci(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_jit_cons_car_cdr(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(car (cdr (cons 1 (cons 2 (cons 3 nil)))))").unwrap();
@@ -937,7 +929,6 @@ fn bench_jit_cons_car_cdr(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_jit_cond_expression(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(cond ((< 5 3) 10) ((> 5 3) 20) (t 30))").unwrap();
@@ -947,7 +938,6 @@ fn bench_jit_cond_expression(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_jit_closure(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(((lambda (x) (lambda (y) (+ x y))) 10) 20)").unwrap();
@@ -957,7 +947,6 @@ fn bench_jit_closure(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_jit_vector_operations(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(vector-ref (vector 10 20 30 40 50) 2)").unwrap();
@@ -967,7 +956,6 @@ fn bench_jit_vector_operations(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_jit_cache_hit(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
 
@@ -980,7 +968,6 @@ fn bench_jit_cache_hit(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_jit_macro_expansion(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let mut env = Environment::new();
@@ -998,7 +985,6 @@ fn bench_jit_macro_expansion(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 criterion_group! {
     name = jit_benches;
     config = Criterion::default()
@@ -1024,7 +1010,6 @@ criterion_group! {
 // separating compilation overhead from execution speed.
 // ============================================================================
 
-#[cfg(feature = "jit")]
 fn bench_precompiled_simple_arithmetic(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(+ 1 2 3 4 5)").unwrap();
@@ -1035,7 +1020,6 @@ fn bench_precompiled_simple_arithmetic(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_precompiled_nested_arithmetic(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(+ (* 2 3) (- 10 5) (/ 20 4))").unwrap();
@@ -1046,7 +1030,6 @@ fn bench_precompiled_nested_arithmetic(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_precompiled_cons_car_cdr(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(car (cdr (cons 1 (cons 2 (cons 3 nil)))))").unwrap();
@@ -1057,7 +1040,6 @@ fn bench_precompiled_cons_car_cdr(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_precompiled_vector_operations(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(vector-ref (vector 10 20 30 40 50) 2)").unwrap();
@@ -1068,7 +1050,6 @@ fn bench_precompiled_vector_operations(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_precompiled_cond_expression(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(cond ((< 5 3) 10) ((> 5 3) 20) (t 30))").unwrap();
@@ -1079,7 +1060,6 @@ fn bench_precompiled_cond_expression(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 fn bench_precompiled_comparison(c: &mut Criterion) {
     let engine = JitEngine::new().unwrap();
     let expr = parse("(< (* 3 7) (+ 10 15))").unwrap();
@@ -1090,7 +1070,6 @@ fn bench_precompiled_comparison(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "jit")]
 criterion_group! {
     name = precompiled_jit_benches;
     config = Criterion::default()
@@ -1105,7 +1084,6 @@ criterion_group! {
         bench_precompiled_comparison
 }
 
-#[cfg(feature = "jit")]
 criterion_main!(
     parsing_benches,
     eval_benches,
@@ -1116,15 +1094,4 @@ criterion_main!(
     macro_benches,
     jit_benches,
     precompiled_jit_benches
-);
-
-#[cfg(not(feature = "jit"))]
-criterion_main!(
-    parsing_benches,
-    eval_benches,
-    numeric_benches,
-    list_benches,
-    string_benches,
-    recursive_benches,
-    macro_benches
 );

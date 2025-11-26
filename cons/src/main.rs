@@ -1,6 +1,4 @@
-use consair::{Environment, eval, parse, register_stdlib};
-#[cfg(feature = "jit")]
-use consair::{jit::JitEngine, runtime::RuntimeValue};
+use consair::{Environment, eval, jit::JitEngine, parse, register_stdlib, runtime::RuntimeValue};
 use rustyline::error::ReadlineError;
 use rustyline::{Config, Editor};
 use std::env;
@@ -42,7 +40,6 @@ fn is_complete_expression(input: &str) -> bool {
 }
 
 /// Print help information
-#[allow(unused_variables)]
 fn print_help(jit_available: bool) {
     println!("Consair REPL - Interactive Lisp Interpreter");
     println!();
@@ -50,7 +47,6 @@ fn print_help(jit_available: bool) {
     println!("  :help, :h        Show this help message");
     println!("  :quit, :q        Exit the REPL");
     println!("  :env             Show current environment bindings");
-    #[cfg(feature = "jit")]
     if jit_available {
         println!("  :jit             Toggle JIT compilation mode");
     }
@@ -81,7 +77,6 @@ fn print_env_info(env: &Environment) {
 }
 
 /// Convert RuntimeValue to string for display
-#[cfg(feature = "jit")]
 fn runtime_value_to_string(val: RuntimeValue) -> String {
     // Convert RuntimeValue back to Value for display
     match val.to_value() {
@@ -90,21 +85,14 @@ fn runtime_value_to_string(val: RuntimeValue) -> String {
     }
 }
 
-#[allow(unused_variables)]
 fn repl_with_jit(start_with_jit: bool) {
     let mut env = Environment::new();
     register_stdlib(&mut env);
 
     // JIT mode state
-    #[cfg(feature = "jit")]
     let mut jit_enabled = start_with_jit;
-    #[cfg(feature = "jit")]
     let jit_engine = JitEngine::new().ok();
-    #[cfg(feature = "jit")]
     let jit_available = jit_engine.is_some();
-
-    #[cfg(not(feature = "jit"))]
-    let jit_available = false;
 
     // Configure rustyline
     let config = Config::builder()
@@ -126,7 +114,6 @@ fn repl_with_jit(start_with_jit: bool) {
 
     // Welcome message
     println!("Consair Lisp REPL v{}", env!("CARGO_PKG_VERSION"));
-    #[cfg(feature = "jit")]
     if jit_available {
         println!(
             "JIT compilation available (mode: {})",
@@ -140,14 +127,11 @@ fn repl_with_jit(start_with_jit: bool) {
 
     loop {
         // Build prompt based on mode
-        #[cfg(feature = "jit")]
         let base_prompt = if jit_enabled {
             "consair[jit]> "
         } else {
             "consair> "
         };
-        #[cfg(not(feature = "jit"))]
-        let base_prompt = "consair> ";
 
         let prompt = if accumulated_input.is_empty() {
             base_prompt
@@ -187,7 +171,6 @@ fn repl_with_jit(start_with_jit: bool) {
                             accumulated_input.clear();
                             continue;
                         }
-                        #[cfg(feature = "jit")]
                         ":jit" => {
                             if jit_available {
                                 jit_enabled = !jit_enabled;
@@ -220,7 +203,6 @@ fn repl_with_jit(start_with_jit: bool) {
                 match parse(&accumulated_input) {
                     Ok(expr) => {
                         // Evaluate with JIT or interpreter
-                        #[cfg(feature = "jit")]
                         let result = if jit_enabled {
                             if let Some(ref engine) = jit_engine {
                                 match engine.eval_with_env(&expr, &mut env) {
@@ -237,9 +219,6 @@ fn repl_with_jit(start_with_jit: bool) {
                         } else {
                             eval(expr, &mut env).map(|v| format!("{v}"))
                         };
-
-                        #[cfg(not(feature = "jit"))]
-                        let result = eval(expr, &mut env).map(|v| format!("{v}"));
 
                         match result {
                             Ok(s) => println!("{s}"),
@@ -574,15 +553,11 @@ fn print_usage() {
     eprintln!("  cons              Start interactive REPL");
     eprintln!("  cons <file.lisp>  Run a Lisp file");
     eprintln!("  cons --help       Show this help message");
-    #[cfg(feature = "jit")]
-    {
-        eprintln!("  cons --jit        Start REPL with JIT compilation enabled");
-        eprintln!("  cons --jit <file> Run a Lisp file with JIT compilation");
-    }
+    eprintln!("  cons --jit        Start REPL with JIT compilation enabled");
+    eprintln!("  cons --jit <file> Run a Lisp file with JIT compilation");
 }
 
 /// Check if an expression is a definition (label, defmacro) that must use interpreter
-#[cfg(feature = "jit")]
 fn is_definition_expr(expr: &consair::Value) -> bool {
     use consair::language::SymbolType;
     use consair::{AtomType, Value};
@@ -597,7 +572,6 @@ fn is_definition_expr(expr: &consair::Value) -> bool {
 }
 
 /// Run a file with JIT compilation enabled
-#[cfg(feature = "jit")]
 fn run_file_jit(filename: &str) -> Result<(), String> {
     let contents = fs::read_to_string(filename)
         .map_err(|e| format!("Failed to read file '{filename}': {e}"))?;
@@ -662,15 +636,7 @@ fn main() {
             if arg == "--help" || arg == "-h" {
                 print_usage();
             } else if arg == "--jit" {
-                #[cfg(feature = "jit")]
-                {
-                    repl_with_jit(true);
-                }
-                #[cfg(not(feature = "jit"))]
-                {
-                    eprintln!("Error: JIT feature not enabled. Rebuild with --features jit");
-                    process::exit(1);
-                }
+                repl_with_jit(true);
             } else {
                 // Run file
                 if let Err(e) = run_file(arg) {
@@ -682,16 +648,8 @@ fn main() {
         3 => {
             // --jit <file>
             if args[1] == "--jit" {
-                #[cfg(feature = "jit")]
-                {
-                    if let Err(e) = run_file_jit(&args[2]) {
-                        eprintln!("{e}");
-                        process::exit(1);
-                    }
-                }
-                #[cfg(not(feature = "jit"))]
-                {
-                    eprintln!("Error: JIT feature not enabled. Rebuild with --features jit");
+                if let Err(e) = run_file_jit(&args[2]) {
+                    eprintln!("{e}");
                     process::exit(1);
                 }
             } else {

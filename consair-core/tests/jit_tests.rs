@@ -1,9 +1,6 @@
 //! JIT compilation tests
 //!
 //! These tests verify the JIT compilation infrastructure works correctly.
-//! Run with: cargo test --features jit
-
-#![cfg(feature = "jit")]
 
 use inkwell::context::Context;
 

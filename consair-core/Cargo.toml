@@ -24,12 +24,8 @@ unicode-segmentation = "1.12"
 im = "15"
 unicode-normalization = "0.1"
 
-# JIT compilation dependencies (optional)
-inkwell = { version = "0.4", features = ["llvm17-0"], optional = true }
-
-[features]
-default = []
-jit = ["inkwell"]
+# JIT compilation (requires LLVM 17.0)
+inkwell = { version = "0.4", features = ["llvm17-0"] }
 
 [dev-dependencies]
 proptest = "1.4"

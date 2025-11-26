@@ -8,16 +8,12 @@ pub mod numeric;
 pub mod parser;
 pub mod stdlib;
 
-// JIT compilation modules (optional)
-#[cfg(feature = "jit")]
+// JIT compilation modules (requires LLVM 17.0)
 pub mod codegen;
-#[cfg(feature = "jit")]
 pub mod jit;
-#[cfg(feature = "jit")]
 pub mod runtime;
 
-// Re-export JIT types when JIT is enabled
-#[cfg(feature = "jit")]
+// Re-export JIT types
 pub use jit::{CompiledExpr, JitError, JitErrorKind};
 
 // Re-export commonly used items for convenience
