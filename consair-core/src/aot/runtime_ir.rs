@@ -65,6 +65,7 @@ fn generate_type_definitions() -> String {
 @fmt_space = private constant [2 x i8] c" \00"
 @fmt_dot = private constant [4 x i8] c" . \00"
 @fmt_newline = private constant [2 x i8] c"\0A\00"
+@fmt_string = private constant [5 x i8] c"%.*s\00"
 "#
     )
 }
