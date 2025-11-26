@@ -22,7 +22,7 @@
 //! - `CompilationError`: LLVM compilation failure
 //! - `ExecutionError`: Runtime execution failure
 
-mod analysis;
+pub mod analysis;
 mod cache;
 mod compiled;
 mod engine;

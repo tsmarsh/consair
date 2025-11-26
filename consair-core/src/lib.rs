@@ -13,6 +13,9 @@ pub mod codegen;
 pub mod jit;
 pub mod runtime;
 
+// AOT compilation module
+pub mod aot;
+
 // Re-export JIT types
 pub use jit::{CompiledExpr, JitError, JitErrorKind};
 

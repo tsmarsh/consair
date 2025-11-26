@@ -2,6 +2,7 @@
 members = [
     "consair-core",
     "cons",
+    "cadr",
 ]
 resolver = "2"
 

@@ -1084,6 +1084,137 @@ criterion_group! {
         bench_precompiled_comparison
 }
 
+// ============================================================================
+// AOT Compilation Benchmarks
+// These benchmarks measure the time to compile Consair source to LLVM IR.
+// ============================================================================
+
+use consair::aot::AotCompiler;
+
+fn bench_aot_simple_arithmetic(c: &mut Criterion) {
+    let compiler = AotCompiler::new();
+
+    c.bench_function("aot compile simple arithmetic", |b| {
+        b.iter(|| black_box(compiler.compile_source("(+ 1 2 3 4 5)").unwrap()))
+    });
+}
+
+fn bench_aot_nested_arithmetic(c: &mut Criterion) {
+    let compiler = AotCompiler::new();
+
+    c.bench_function("aot compile nested arithmetic", |b| {
+        b.iter(|| {
+            black_box(
+                compiler
+                    .compile_source("(+ (* 2 3) (- 10 5) (/ 20 4))")
+                    .unwrap(),
+            )
+        })
+    });
+}
+
+fn bench_aot_lambda_invocation(c: &mut Criterion) {
+    let compiler = AotCompiler::new();
+
+    c.bench_function("aot compile lambda invocation", |b| {
+        b.iter(|| {
+            black_box(
+                compiler
+                    .compile_source("((lambda (x) (+ x 1)) 42)")
+                    .unwrap(),
+            )
+        })
+    });
+}
+
+fn bench_aot_recursive_factorial(c: &mut Criterion) {
+    let compiler = AotCompiler::new();
+    let source = r#"
+        ((label factorial (lambda (n)
+            (cond
+                ((= n 0) 1)
+                (t (* n (factorial (- n 1)))))))
+         10)
+    "#;
+
+    c.bench_function("aot compile recursive factorial", |b| {
+        b.iter(|| black_box(compiler.compile_source(source).unwrap()))
+    });
+}
+
+fn bench_aot_closure(c: &mut Criterion) {
+    let compiler = AotCompiler::new();
+
+    c.bench_function("aot compile closure", |b| {
+        b.iter(|| {
+            black_box(
+                compiler
+                    .compile_source("((lambda (f) (f 10)) ((lambda (y) (lambda (x) (+ x y))) 5))")
+                    .unwrap(),
+            )
+        })
+    });
+}
+
+fn bench_aot_vector_operations(c: &mut Criterion) {
+    let compiler = AotCompiler::new();
+
+    c.bench_function("aot compile vector operations", |b| {
+        b.iter(|| {
+            black_box(
+                compiler
+                    .compile_source("(vector-ref (vector 10 20 30 40 50) 2)")
+                    .unwrap(),
+            )
+        })
+    });
+}
+
+fn bench_aot_cond_expression(c: &mut Criterion) {
+    let compiler = AotCompiler::new();
+
+    c.bench_function("aot compile cond expression", |b| {
+        b.iter(|| {
+            black_box(
+                compiler
+                    .compile_source("(cond ((< 5 3) 10) ((> 5 3) 20) (t 30))")
+                    .unwrap(),
+            )
+        })
+    });
+}
+
+fn bench_aot_tco_countdown(c: &mut Criterion) {
+    let compiler = AotCompiler::new();
+    let source = r#"
+        ((label countdown (lambda (n)
+            (cond
+                ((= n 0) 0)
+                (t (countdown (- n 1))))))
+         1000)
+    "#;
+
+    c.bench_function("aot compile TCO countdown", |b| {
+        b.iter(|| black_box(compiler.compile_source(source).unwrap()))
+    });
+}
+
+criterion_group! {
+    name = aot_benches;
+    config = Criterion::default()
+        .sample_size(100)
+        .measurement_time(Duration::from_secs(10));
+    targets =
+        bench_aot_simple_arithmetic,
+        bench_aot_nested_arithmetic,
+        bench_aot_lambda_invocation,
+        bench_aot_recursive_factorial,
+        bench_aot_closure,
+        bench_aot_vector_operations,
+        bench_aot_cond_expression,
+        bench_aot_tco_countdown
+}
+
 criterion_main!(
     parsing_benches,
     eval_benches,
@@ -1093,5 +1224,6 @@ criterion_main!(
     recursive_benches,
     macro_benches,
     jit_benches,
-    precompiled_jit_benches
+    precompiled_jit_benches,
+    aot_benches
 );

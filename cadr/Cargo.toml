@@ -1,0 +1,18 @@
+[package]
+name = "cadr"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "AOT compiler for Consair Lisp - compiles to LLVM IR"
+readme = "../README.md"
+keywords = ["lisp", "compiler", "llvm", "aot"]
+categories = ["command-line-utilities", "compilers"]
+repository = "https://github.com/tsmarsh/consair"
+
+[dependencies]
+consair-core = { workspace = true }
+
+[[bin]]
+name = "cadr"
+path = "src/main.rs"
