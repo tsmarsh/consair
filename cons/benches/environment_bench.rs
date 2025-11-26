@@ -1,4 +1,4 @@
-use consair::interpreter::Environment;
+use consair::Environment;
 use consair::language::{AtomType, Value};
 use consair::numeric::NumericType;
 use std::time::Instant;

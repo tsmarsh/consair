@@ -1,5 +1,6 @@
+use cons::eval;
+use consair::language::{AtomType, StringType};
 use consair::*;
-use language::{AtomType, StringType};
 
 #[test]
 fn test_basic_string() {

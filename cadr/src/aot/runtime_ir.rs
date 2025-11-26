@@ -3,7 +3,7 @@
 //! This module contains hand-written LLVM IR for the runtime functions
 //! that need to be embedded in AOT-compiled output.
 
-use crate::runtime::{
+use cons::runtime::{
     TAG_BOOL, TAG_CLOSURE, TAG_CONS, TAG_FLOAT, TAG_INT, TAG_NIL, TAG_STRING, TAG_SYMBOL,
     TAG_VECTOR,
 };

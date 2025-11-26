@@ -1,4 +1,5 @@
-use consair::{Environment, eval, jit::JitEngine, parse, register_stdlib, runtime::RuntimeValue};
+use cons::{eval, jit::JitEngine, register_stdlib, runtime::RuntimeValue};
+use consair::{Environment, parse};
 use rustyline::error::ReadlineError;
 use rustyline::{Config, Editor};
 use std::env;

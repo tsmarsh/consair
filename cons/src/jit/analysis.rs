@@ -5,8 +5,8 @@
 
 use std::collections::HashSet;
 
-use crate::interner::InternedSymbol;
-use crate::language::{AtomType, SymbolType, Value};
+use consair::interner::InternedSymbol;
+use consair::language::{AtomType, SymbolType, Value};
 
 /// Find all free variables in an expression.
 /// A free variable is one that is used but not defined in the local scope.

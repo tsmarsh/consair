@@ -1,33 +1,27 @@
+//! Core language definition for Consair
+//!
+//! This crate contains the fundamental types, parser, and abstractions
+//! for the Consair Lisp language. It does not include execution engines
+//! (interpreter, JIT, AOT) - those are in the `cons` and `cadr` crates.
+
 pub mod abstractions;
+pub mod environment;
 pub mod interner;
-pub mod interpreter;
 pub mod language;
 pub mod lexer;
-pub mod native;
 pub mod numeric;
 pub mod parser;
-pub mod stdlib;
-
-// JIT compilation modules (requires LLVM 17.0)
-pub mod codegen;
-pub mod jit;
-pub mod runtime;
-
-// AOT compilation module
-pub mod aot;
-
-// Re-export JIT types
-pub use jit::{CompiledExpr, JitError, JitErrorKind};
 
 // Re-export commonly used items for convenience
 pub use abstractions::{
     Seq, assoc, conj, count, first, get, hash_map, hash_set, is_callable, is_reduced, next, nth,
     reduced, rest, seq, unreduced,
 };
-pub use interpreter::{Environment, eval, expand_all_macros, expand_macros};
+pub use environment::Environment;
+pub use interner::InternedSymbol;
 pub use language::{
-    AtomType, ConsCell, LambdaCell, MapValue, NativeFn, SetValue, Value, VectorValue, cons,
+    AtomType, ConsCell, LambdaCell, MacroCell, MapValue, NativeFn, PersistentMap, PersistentSet,
+    PersistentVector, SetValue, StringType, SymbolType, Value, VectorValue, cons,
 };
 pub use numeric::NumericType;
 pub use parser::parse;
-pub use stdlib::register_stdlib;

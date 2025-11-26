@@ -11,17 +11,18 @@ use std::path::Path;
 use inkwell::context::Context;
 use inkwell::values::{BasicValue, FunctionValue, StructValue};
 
-use crate::codegen::Codegen;
-use crate::interner::InternedSymbol;
-use crate::jit::JitError;
-use crate::language::{AtomType, StringType, SymbolType, Value};
-use crate::lexer::Lexer;
-use crate::numeric::NumericType;
-use crate::parser::Parser;
-use crate::runtime::{TAG_BOOL, TAG_NIL};
+use cons::codegen::Codegen;
+use cons::jit::JitError;
+use cons::jit::analysis::find_free_variables;
+use cons::runtime::{TAG_BOOL, TAG_NIL};
+
+use consair::interner::InternedSymbol;
+use consair::language::{AtomType, StringType, SymbolType, Value};
+use consair::lexer::Lexer;
+use consair::numeric::NumericType;
+use consair::parser::Parser;
 
 use super::runtime_ir::generate_runtime_ir;
-use crate::jit::analysis::find_free_variables;
 
 /// Counter for generating unique function names for labeled lambdas.
 static EXPR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

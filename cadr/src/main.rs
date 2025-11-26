@@ -19,7 +19,7 @@ use std::env;
 use std::path::Path;
 use std::process;
 
-use consair::aot::AotCompiler;
+use cadr::aot::AotCompiler;
 
 fn print_usage() {
     eprintln!("cadr - AOT compiler for Consair Lisp");

@@ -3,7 +3,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use crate::language::{AtomType, SymbolType, Value};
+use consair::language::{AtomType, SymbolType, Value};
 
 /// Compute a hash of an expression for cache lookup.
 pub fn hash_expression(expr: &Value) -> u64 {

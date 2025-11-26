@@ -12,6 +12,14 @@ repository = "https://github.com/tsmarsh/consair"
 
 [dependencies]
 core = { workspace = true }
+cons = { workspace = true }
+
+# LLVM for AOT compilation
+inkwell = { version = "0.4", features = ["llvm17-0"] }
+
+[lib]
+name = "cadr"
+path = "src/lib.rs"
 
 [[bin]]
 name = "cadr"

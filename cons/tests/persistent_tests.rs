@@ -3,8 +3,9 @@
 //! These tests verify that the persistent feature provides proper
 //! structural sharing for efficient immutable operations.
 
+use cons::{eval, register_stdlib};
 use consair::abstractions::{assoc, conj, count, empty_map, get, hash_map, hash_set};
-use consair::{Environment, eval, parse, register_stdlib};
+use consair::{Environment, parse};
 
 fn setup_env() -> Environment {
     let mut env = Environment::new();

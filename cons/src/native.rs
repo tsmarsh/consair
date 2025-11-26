@@ -3,9 +3,9 @@
 //! This module provides utility functions for implementing native Rust functions
 //! that can be called from Lisp code.
 
-use crate::interner::InternedSymbol;
-use crate::language::{AtomType, StringType, SymbolType, Value, cons};
-use crate::numeric::NumericType;
+use consair::interner::InternedSymbol;
+use consair::language::{AtomType, StringType, SymbolType, Value, cons};
+use consair::numeric::NumericType;
 
 // ============================================================================
 // Value Extraction Helpers

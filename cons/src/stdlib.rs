@@ -9,11 +9,15 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::interner::InternedSymbol;
 use crate::interpreter::Environment;
-use crate::language::{AtomType, StringType, SymbolType, Value};
 use crate::native::{extract_string, make_int, make_string, vec_to_alist};
-use crate::numeric::NumericType;
+
+use consair::abstractions;
+use consair::interner::InternedSymbol;
+use consair::language::{
+    AtomType, MapValue, SetValue, StringType, SymbolType, Value, VectorValue, cons,
+};
+use consair::numeric::NumericType;
 
 // ============================================================================
 // Standard I/O
@@ -61,7 +65,7 @@ fn print_impl(args: &[Value], newline: bool) -> Result<Value, String> {
 /// Strings are printed without quotes, everything else uses Display
 fn value_to_display_string(value: &Value) -> String {
     match value {
-        Value::Atom(AtomType::String(crate::language::StringType::Basic(s))) => s.clone(),
+        Value::Atom(AtomType::String(StringType::Basic(s))) => s.clone(),
         _ => format!("{value}"),
     }
 }
@@ -201,7 +205,7 @@ pub fn gensym(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
     let symbol = format!("{prefix}__{counter}");
 
     Ok(Value::Atom(AtomType::Symbol(SymbolType::Symbol(
-        crate::interner::InternedSymbol::new(&symbol),
+        InternedSymbol::new(&symbol),
     ))))
 }
 
@@ -320,7 +324,7 @@ pub fn cons_fn(args: &[Value], _env: &mut Environment) -> Result<Value, String> 
     if args.len() != 2 {
         return Err("cons: expected 2 arguments".to_string());
     }
-    Ok(crate::language::cons(args[0].clone(), args[1].clone()))
+    Ok(cons(args[0].clone(), args[1].clone()))
 }
 
 // ============================================================================
@@ -404,7 +408,7 @@ pub fn append(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
     // Build result by consing onto second list
     let mut result = args[1].clone();
     for elem in elements.into_iter().rev() {
-        result = crate::language::cons(elem, result);
+        result = cons(elem, result);
     }
     Ok(result)
 }
@@ -418,7 +422,7 @@ pub fn reverse(args: &[Value], _env: &mut Environment) -> Result<Value, String> 
     let mut result = Value::Nil;
     let mut current = &args[0];
     while let Value::Cons(cell) = current {
-        result = crate::language::cons(cell.car.clone(), result);
+        result = cons(cell.car.clone(), result);
         current = &cell.cdr;
     }
     Ok(result)
@@ -428,7 +432,7 @@ pub fn reverse(args: &[Value], _env: &mut Environment) -> Result<Value, String> 
 pub fn list(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
     let mut result = Value::Nil;
     for arg in args.iter().rev() {
-        result = crate::language::cons(arg.clone(), result);
+        result = cons(arg.clone(), result);
     }
     Ok(result)
 }
@@ -696,7 +700,7 @@ pub fn num_eq(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
 
 /// Construct a fast vector from arguments
 pub fn vector(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
-    Ok(Value::Vector(Arc::new(crate::language::VectorValue {
+    Ok(Value::Vector(Arc::new(VectorValue {
         elements: args.to_vec(),
     })))
 }
@@ -712,7 +716,7 @@ pub fn builtin_seq(args: &[Value], _env: &mut Environment) -> Result<Value, Stri
     if args.len() != 1 {
         return Err("%seq: expected 1 argument".to_string());
     }
-    Ok(crate::abstractions::seq(&args[0]).map_or(Value::Nil, |s| s.to_list()))
+    Ok(abstractions::seq(&args[0]).map_or(Value::Nil, |s| s.to_list()))
 }
 
 /// First element of a sequence
@@ -721,7 +725,7 @@ pub fn builtin_first(args: &[Value], _env: &mut Environment) -> Result<Value, St
     if args.len() != 1 {
         return Err("%first: expected 1 argument".to_string());
     }
-    Ok(crate::abstractions::first(&args[0]))
+    Ok(abstractions::first(&args[0]))
 }
 
 /// Next elements of a sequence (rest, but returns nil for empty)
@@ -730,7 +734,7 @@ pub fn builtin_next(args: &[Value], _env: &mut Environment) -> Result<Value, Str
     if args.len() != 1 {
         return Err("%next: expected 1 argument".to_string());
     }
-    Ok(crate::abstractions::next(&args[0]))
+    Ok(abstractions::next(&args[0]))
 }
 
 /// Rest of a sequence (like next but returns () for empty)
@@ -739,7 +743,7 @@ pub fn builtin_rest(args: &[Value], _env: &mut Environment) -> Result<Value, Str
     if args.len() != 1 {
         return Err("%rest: expected 1 argument".to_string());
     }
-    Ok(crate::abstractions::rest(&args[0]))
+    Ok(abstractions::rest(&args[0]))
 }
 
 /// Count elements in a collection
@@ -748,7 +752,7 @@ pub fn builtin_count(args: &[Value], _env: &mut Environment) -> Result<Value, St
     if args.len() != 1 {
         return Err("%count: expected 1 argument".to_string());
     }
-    crate::abstractions::count(&args[0])
+    abstractions::count(&args[0])
         .map(|n| Value::Atom(AtomType::Number(NumericType::Int(n as i64))))
         .ok_or_else(|| format!("%count: cannot count {}", args[0]))
 }
@@ -765,7 +769,7 @@ pub fn builtin_nth(args: &[Value], _env: &mut Environment) -> Result<Value, Stri
         _ => return Err("%nth: index must be a non-negative integer".to_string()),
     };
     let default = args.get(2);
-    Ok(crate::abstractions::nth(&args[0], index, default))
+    Ok(abstractions::nth(&args[0], index, default))
 }
 
 /// Get value by key from collection
@@ -776,7 +780,7 @@ pub fn builtin_get(args: &[Value], _env: &mut Environment) -> Result<Value, Stri
         return Err("%get: expected 2-3 arguments (coll, key, [default])".to_string());
     }
     let default = args.get(2);
-    Ok(crate::abstractions::get(&args[0], &args[1], default))
+    Ok(abstractions::get(&args[0], &args[1], default))
 }
 
 /// Associate a key with a value in a collection
@@ -790,7 +794,7 @@ pub fn builtin_assoc(args: &[Value], _env: &mut Environment) -> Result<Value, St
     }
     let mut result = args[0].clone();
     for chunk in args[1..].chunks(2) {
-        result = crate::abstractions::assoc(&result, chunk[0].clone(), chunk[1].clone())?;
+        result = abstractions::assoc(&result, chunk[0].clone(), chunk[1].clone())?;
     }
     Ok(result)
 }
@@ -804,7 +808,7 @@ pub fn builtin_conj(args: &[Value], _env: &mut Environment) -> Result<Value, Str
     }
     let mut result = args[0].clone();
     for item in &args[1..] {
-        result = crate::abstractions::conj(&result, item.clone())?;
+        result = abstractions::conj(&result, item.clone())?;
     }
     Ok(result)
 }
@@ -815,7 +819,7 @@ pub fn builtin_reduced(args: &[Value], _env: &mut Environment) -> Result<Value, 
     if args.len() != 1 {
         return Err("%reduced: expected 1 argument".to_string());
     }
-    Ok(crate::abstractions::reduced(args[0].clone()))
+    Ok(abstractions::reduced(args[0].clone()))
 }
 
 /// Check if a value is reduced
@@ -824,9 +828,9 @@ pub fn builtin_reduced_p(args: &[Value], _env: &mut Environment) -> Result<Value
     if args.len() != 1 {
         return Err("%reduced?: expected 1 argument".to_string());
     }
-    Ok(Value::Atom(AtomType::Bool(
-        crate::abstractions::is_reduced(&args[0]),
-    )))
+    Ok(Value::Atom(AtomType::Bool(abstractions::is_reduced(
+        &args[0],
+    ))))
 }
 
 /// Unwrap a reduced value
@@ -835,7 +839,7 @@ pub fn builtin_unreduced(args: &[Value], _env: &mut Environment) -> Result<Value
     if args.len() != 1 {
         return Err("%unreduced: expected 1 argument".to_string());
     }
-    Ok(crate::abstractions::unreduced(&args[0]))
+    Ok(abstractions::unreduced(&args[0]))
 }
 
 /// Create a hash map from key-value pairs
@@ -848,13 +852,13 @@ pub fn builtin_hash_map(args: &[Value], _env: &mut Environment) -> Result<Value,
         .chunks(2)
         .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
         .collect();
-    Ok(crate::abstractions::hash_map(pairs))
+    Ok(abstractions::hash_map(pairs))
 }
 
 /// Create a hash set from elements
 /// Usage: (%hash-set 1 2 3) => #{1 2 3}
 pub fn builtin_hash_set(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
-    Ok(crate::abstractions::hash_set(args.to_vec()))
+    Ok(abstractions::hash_set(args.to_vec()))
 }
 
 /// Check if a value is empty
@@ -908,7 +912,7 @@ pub fn builtin_keys(args: &[Value], _env: &mut Environment) -> Result<Value, Str
         Value::Map(m) => {
             let mut result = Value::Nil;
             for k in m.entries.keys() {
-                result = crate::language::cons(k.clone(), result);
+                result = cons(k.clone(), result);
             }
             Ok(result)
         }
@@ -926,7 +930,7 @@ pub fn builtin_vals(args: &[Value], _env: &mut Environment) -> Result<Value, Str
         Value::Map(m) => {
             let mut result = Value::Nil;
             for v in m.entries.values() {
-                result = crate::language::cons(v.clone(), result);
+                result = cons(v.clone(), result);
             }
             Ok(result)
         }
@@ -948,7 +952,7 @@ pub fn builtin_dissoc(args: &[Value], _env: &mut Environment) -> Result<Value, S
             for key in &args[1..] {
                 entries.remove(key);
             }
-            Ok(Value::Map(Arc::new(crate::language::MapValue { entries })))
+            Ok(Value::Map(Arc::new(MapValue { entries })))
         }
         _ => Err(format!("%dissoc: expected map, got {}", args[0])),
     }
@@ -967,7 +971,7 @@ pub fn builtin_disj(args: &[Value], _env: &mut Environment) -> Result<Value, Str
             for elem in &args[1..] {
                 elements.remove(elem);
             }
-            Ok(Value::Set(Arc::new(crate::language::SetValue { elements })))
+            Ok(Value::Set(Arc::new(SetValue { elements })))
         }
         _ => Err(format!("%disj: expected set, got {}", args[0])),
     }

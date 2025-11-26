@@ -1,7 +1,7 @@
-use consair::interpreter::Environment;
+use cons::{eval, register_stdlib};
 use consair::language::{AtomType, StringType, SymbolType, Value};
 use consair::numeric::NumericType;
-use consair::{eval, parse, register_stdlib};
+use consair::{Environment, parse};
 use std::fs;
 
 // ============================================================================

@@ -87,7 +87,9 @@ checksum = "46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43"
 name = "cadr"
 version = "0.2.0"
 dependencies = [
+ "cons",
  "core",
+ "inkwell",
 ]
 
 [[package]]
@@ -244,8 +246,13 @@ dependencies = [
 name = "cons"
 version = "0.2.0"
 dependencies = [
+ "cadr",
+ "codspeed-criterion-compat",
  "core",
+ "criterion",
  "dirs",
+ "inkwell",
+ "num-bigint",
  "rand 0.8.5",
  "rustyline",
 ]
@@ -254,8 +261,6 @@ dependencies = [
 name = "core"
 version = "0.2.0"
 dependencies = [
- "codspeed-criterion-compat",
- "criterion",
  "im",
  "inkwell",
  "num-bigint",

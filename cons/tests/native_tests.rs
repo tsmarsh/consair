@@ -1,7 +1,7 @@
-use consair::interpreter::Environment;
+use cons::eval;
+use cons::native::{check_arity_exact, make_int, make_string};
 use consair::language::{AtomType, StringType, Value};
-use consair::native::{check_arity_exact, make_int, make_string};
-use consair::{eval, parse};
+use consair::{Environment, parse};
 
 // ============================================================================
 // Example Native Functions

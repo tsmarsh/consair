@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use crate::language::Value;
+use consair::language::Value;
 
 /// Categories of JIT compilation errors.
 #[derive(Debug, Clone, PartialEq)]

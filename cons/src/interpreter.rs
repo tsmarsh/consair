@@ -1,80 +1,11 @@
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
-use crate::interner::InternedSymbol;
-use crate::language::{AtomType, LambdaCell, MacroCell, SymbolType, Value, car, cdr, cons};
-use crate::numeric::NumericType;
+use consair::interner::InternedSymbol;
+use consair::language::{AtomType, LambdaCell, MacroCell, SymbolType, Value, car, cdr, cons};
+use consair::numeric::NumericType;
 
-// ============================================================================
-// Environment
-// ============================================================================
-
-// Internal state holding the data and parent pointer
-struct EnvironmentState {
-    data: HashMap<String, Value>,
-    parent: Option<Arc<Environment>>,
-}
-
-// The public wrapper that is cheap to clone
-#[derive(Clone)]
-pub struct Environment {
-    state: Arc<RwLock<EnvironmentState>>,
-}
-
-impl Default for Environment {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Environment {
-    /// Create a new, empty global environment
-    pub fn new() -> Self {
-        Environment {
-            state: Arc::new(RwLock::new(EnvironmentState {
-                data: HashMap::new(),
-                parent: None,
-            })),
-        }
-    }
-
-    /// Create a child environment extending the current one
-    pub fn extend(&self, params: &[crate::interner::InternedSymbol], args: &[Value]) -> Self {
-        let mut data = HashMap::new();
-        for (param, arg) in params.iter().zip(args.iter()) {
-            data.insert(param.resolve(), arg.clone());
-        }
-
-        Environment {
-            state: Arc::new(RwLock::new(EnvironmentState {
-                data,
-                // The child holds a reference to the parent's wrapper
-                parent: Some(Arc::new(self.clone())),
-            })),
-        }
-    }
-
-    /// Define a variable in the CURRENT scope (mutating the shared state)
-    pub fn define(&self, name: String, value: Value) {
-        let mut state = self.state.write().unwrap();
-        state.data.insert(name, value);
-    }
-
-    /// Look up a variable, walking up the parent chain
-    pub fn lookup(&self, name: &str) -> Option<Value> {
-        let state = self.state.read().unwrap();
-
-        if let Some(val) = state.data.get(name) {
-            return Some(val.clone());
-        }
-
-        // Recursive lookup in parent
-        match &state.parent {
-            Some(parent) => parent.lookup(name),
-            None => None,
-        }
-    }
-}
+// Re-export Environment from core
+pub use consair::Environment;
 
 // ============================================================================
 // Evaluator with Tail Call Optimization

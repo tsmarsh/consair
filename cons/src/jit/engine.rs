@@ -9,11 +9,13 @@ use inkwell::execution_engine::ExecutionEngine;
 use inkwell::values::FunctionValue;
 
 use crate::codegen::Codegen;
-use crate::interner::InternedSymbol;
-use crate::interpreter::{Environment, expand_all_macros};
-use crate::language::{AtomType, SymbolType, Value};
-use crate::numeric::NumericType;
+use crate::interpreter::expand_all_macros;
 use crate::runtime::RuntimeValue;
+
+use consair::Environment;
+use consair::interner::InternedSymbol;
+use consair::language::{AtomType, SymbolType, Value};
+use consair::numeric::NumericType;
 
 use super::analysis::find_free_variables;
 use super::cache::{CacheConfig, CacheStats, hash_expression, is_pure_expression};
@@ -2102,7 +2104,7 @@ impl Default for JitEngine {
 mod tests {
     use super::*;
     use crate::jit::{JitError, JitErrorKind};
-    use crate::parser::parse;
+    use consair::parser::parse;
 
     #[test]
     fn test_jit_engine_creation() {
@@ -2357,11 +2359,11 @@ mod tests {
 
         let result = engine
             .eval(&Value::Cons(std::sync::Arc::new(
-                crate::language::ConsCell {
-                    car: Value::Atom(AtomType::Symbol(SymbolType::Symbol(
-                        crate::interner::InternedSymbol::new("not"),
-                    ))),
-                    cdr: Value::Cons(std::sync::Arc::new(crate::language::ConsCell {
+                consair::language::ConsCell {
+                    car: Value::Atom(AtomType::Symbol(SymbolType::Symbol(InternedSymbol::new(
+                        "not",
+                    )))),
+                    cdr: Value::Cons(std::sync::Arc::new(consair::language::ConsCell {
                         car: Value::Atom(AtomType::Bool(true)),
                         cdr: Value::Nil,
                     })),

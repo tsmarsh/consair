@@ -15,3 +15,4 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 core = { path = "core" }
 cons = { path = "cons" }
+cadr = { path = "cadr" }

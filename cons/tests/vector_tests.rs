@@ -1,4 +1,5 @@
-use consair::{AtomType, Environment, NumericType, Value, eval, parse, register_stdlib};
+use cons::{eval, register_stdlib};
+use consair::{AtomType, Environment, NumericType, Value, parse};
 
 fn eval_vector(expr: &str) -> Value {
     let mut env = Environment::new();

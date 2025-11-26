@@ -1,6 +1,6 @@
+use cons::{eval, register_stdlib};
 use consair::{
-    AtomType, Environment, NumericType, Value, eval, interner::InternedSymbol, language, parse,
-    register_stdlib,
+    AtomType, Environment, NumericType, Value, interner::InternedSymbol, language, parse,
 };
 
 // ============================================================================

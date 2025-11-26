@@ -1,6 +1,5 @@
-use consair::interpreter::Environment;
-use consair::stdlib::register_stdlib;
-use consair::{eval, parse};
+use cons::{eval, register_stdlib};
+use consair::{Environment, parse};
 
 fn eval_str(input: &str) -> Result<String, String> {
     let mut env = Environment::new();

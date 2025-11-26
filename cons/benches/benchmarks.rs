@@ -1,8 +1,9 @@
 use codspeed_criterion_compat::{Criterion, black_box, criterion_group, criterion_main};
+use cons::jit::JitEngine;
+use cons::{eval, register_stdlib};
 use consair::interner::InternedSymbol;
-use consair::jit::JitEngine;
 use consair::language::AtomType;
-use consair::{Environment, NumericType, Value, cons, eval, parse, register_stdlib};
+use consair::{Environment, NumericType, Value, cons, parse};
 use std::time::Duration;
 
 // ============================================================================
@@ -1089,7 +1090,7 @@ criterion_group! {
 // These benchmarks measure the time to compile Consair source to LLVM IR.
 // ============================================================================
 
-use consair::aot::AotCompiler;
+use cadr::aot::AotCompiler;
 
 fn bench_aot_simple_arithmetic(c: &mut Criterion) {
     let compiler = AotCompiler::new();

@@ -5,8 +5,8 @@ use std::sync::Arc;
 use im::{HashMap as ImHashMap, HashSet as ImHashSet, Vector as ImVector};
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::environment::Environment;
 use crate::interner::InternedSymbol;
-use crate::interpreter::Environment;
 use crate::numeric::NumericType;
 
 // ============================================================================

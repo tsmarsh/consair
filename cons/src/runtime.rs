@@ -6,9 +6,9 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 
-use crate::interner::InternedSymbol;
-use crate::language::{AtomType, ConsCell, StringType, SymbolType, Value, VectorValue};
-use crate::numeric::NumericType;
+use consair::interner::InternedSymbol;
+use consair::language::{AtomType, ConsCell, StringType, SymbolType, Value, VectorValue};
+use consair::numeric::NumericType;
 
 // ============================================================================
 // Tag Constants
@@ -1713,7 +1713,7 @@ mod tests {
 
     #[test]
     fn test_convert_cons() {
-        use crate::language::cons;
+        use consair::language::cons;
         let list = cons(
             Value::Atom(AtomType::Number(NumericType::Int(1))),
             cons(
@@ -1743,7 +1743,7 @@ mod tests {
 
     #[test]
     fn test_convert_nested_cons() {
-        use crate::language::cons;
+        use consair::language::cons;
         // ((1 2) 3)
         let inner = cons(
             Value::Atom(AtomType::Number(NumericType::Int(1))),

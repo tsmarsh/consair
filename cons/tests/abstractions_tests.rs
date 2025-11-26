@@ -1,6 +1,7 @@
 //! Integration tests for Clojure-inspired abstractions.
 
-use consair::{AtomType, Environment, NumericType, Value, eval, parse, register_stdlib};
+use cons::{eval, register_stdlib};
+use consair::{AtomType, Environment, NumericType, Value, parse};
 
 fn run(code: &str) -> Result<Value, String> {
     let mut env = Environment::new();
