@@ -129,6 +129,5 @@ The interpreter will:
 
 ## Limitations
 
-- No comments supported yet (`;` is not recognized)
 - Each expression must be complete
 - Recursive functions may have limitations depending on the implementation
