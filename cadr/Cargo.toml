@@ -11,7 +11,7 @@ categories = ["command-line-utilities", "compilers"]
 repository = "https://github.com/tsmarsh/consair"
 
 [dependencies]
-consair-core = { workspace = true }
+core = { workspace = true }
 
 [[bin]]
 name = "cadr"

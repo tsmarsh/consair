@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "consair-core",
+    "core",
     "cons",
     "cadr",
 ]
@@ -13,4 +13,5 @@ authors = ["Claude Code"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-consair-core = { path = "consair-core" }
+core = { path = "core" }
+cons = { path = "cons" }

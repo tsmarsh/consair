@@ -11,7 +11,7 @@ categories = ["command-line-utilities"]
 repository = "https://github.com/tsmarsh/consair"
 
 [dependencies]
-consair-core = { workspace = true }
+core = { workspace = true }
 rustyline = "14.0"
 dirs = "5.0"
 

@@ -1,12 +1,12 @@
 [package]
-name = "consair-core"
+name = "core"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Core library for Consair - Minimal Lisp based on McCarthy's 1960 paper"
+description = "Core language definition for Consair - types, parser, and semantics"
 readme = "../README.md"
-keywords = ["lisp", "interpreter", "functional", "mccarthy"]
+keywords = ["lisp", "language", "types", "parser"]
 categories = ["compilers", "development-tools"]
 repository = "https://github.com/tsmarsh/consair"
 
@@ -24,7 +24,7 @@ unicode-segmentation = "1.12"
 im = "15"
 unicode-normalization = "0.1"
 
-# JIT compilation (requires LLVM 17.0)
+# JIT compilation (requires LLVM 17.0) - will move to cons later
 inkwell = { version = "0.4", features = ["llvm17-0"] }
 
 [dev-dependencies]
