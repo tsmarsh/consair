@@ -136,6 +136,9 @@ fn generate_runtime_functions() -> String {
     ir.push_str(&generate_rt_vector_length());
     ir.push_str(&generate_rt_vector_ref());
 
+    // String functions
+    ir.push_str(&generate_rt_make_string());
+
     // Utility
     ir.push_str(&generate_rt_now());
 
@@ -147,6 +150,8 @@ fn generate_io_functions() -> String {
     let mut ir = String::new();
     ir.push_str(&generate_rt_println());
     ir.push_str(&generate_rt_print());
+    ir.push_str(&generate_rt_print_space());
+    ir.push_str(&generate_rt_print_newline());
     ir
 }
 
@@ -1169,6 +1174,38 @@ return_nil:
     )
 }
 
+fn generate_rt_make_string() -> String {
+    format!(
+        r#"
+; rt_make_string: Create a string from a pointer and length
+; For string literals, the data pointer points to constant data (no allocation needed)
+define %RuntimeValue @rt_make_string(ptr %data, i64 %len) {{
+entry:
+  ; Allocate RuntimeString struct (ptr + i64 + i32 = 8 + 8 + 4 = 20, round to 24)
+  %str_ptr = call ptr @malloc(i64 24)
+
+  ; Store data pointer
+  %data_slot = getelementptr %RuntimeString, ptr %str_ptr, i32 0, i32 0
+  store ptr %data, ptr %data_slot
+
+  ; Store length
+  %len_slot = getelementptr %RuntimeString, ptr %str_ptr, i32 0, i32 1
+  store i64 %len, ptr %len_slot
+
+  ; Store refcount (1 for new allocation)
+  %refcount_slot = getelementptr %RuntimeString, ptr %str_ptr, i32 0, i32 2
+  store i32 1, ptr %refcount_slot
+
+  ; Create result RuntimeValue
+  %ptr_int = ptrtoint ptr %str_ptr to i64
+  %result1 = insertvalue %RuntimeValue undef, i8 {TAG_STRING}, 0
+  %result2 = insertvalue %RuntimeValue %result1, i64 %ptr_int, 1
+  ret %RuntimeValue %result2
+}}
+"#
+    )
+}
+
 fn generate_rt_now() -> String {
     r#"
 ; rt_now: Get current Unix timestamp (stub - returns 0)
@@ -1219,6 +1256,40 @@ entry:
     )
 }
 
+fn generate_rt_print_space() -> String {
+    r#"
+; rt_print_space: Print a space character, return nil
+define %RuntimeValue @rt_print_space() {
+entry:
+  %space_fmt = getelementptr [2 x i8], ptr @fmt_space, i32 0, i32 0
+  call i32 (ptr, ...) @printf(ptr %space_fmt)
+
+  ; Return nil
+  %nil1 = insertvalue %RuntimeValue undef, i8 0, 0
+  %nil2 = insertvalue %RuntimeValue %nil1, i64 0, 1
+  ret %RuntimeValue %nil2
+}
+"#
+    .to_string()
+}
+
+fn generate_rt_print_newline() -> String {
+    r#"
+; rt_print_newline: Print a newline character, return nil
+define %RuntimeValue @rt_print_newline() {
+entry:
+  %newline_fmt = getelementptr [2 x i8], ptr @fmt_newline, i32 0, i32 0
+  call i32 (ptr, ...) @printf(ptr %newline_fmt)
+
+  ; Return nil
+  %nil1 = insertvalue %RuntimeValue undef, i8 0, 0
+  %nil2 = insertvalue %RuntimeValue %nil1, i64 0, 1
+  ret %RuntimeValue %nil2
+}
+"#
+    .to_string()
+}
+
 fn generate_print_result() -> String {
     format!(
         r#"
@@ -1234,6 +1305,7 @@ entry:
     i8 {TAG_INT}, label %print_int
     i8 {TAG_FLOAT}, label %print_float
     i8 {TAG_CONS}, label %print_cons
+    i8 {TAG_STRING}, label %print_string
   ]
 
 print_nil:
@@ -1277,6 +1349,22 @@ print_cons:
   ; Print closing paren
   %close_fmt = getelementptr [2 x i8], ptr @fmt_cons_close, i32 0, i32 0
   call i32 (ptr, ...) @printf(ptr %close_fmt)
+  br label %done
+
+print_string:
+  ; Get RuntimeString pointer
+  %str_ptr = inttoptr i64 %data to ptr
+  ; Get data pointer
+  %str_data_slot = getelementptr %RuntimeString, ptr %str_ptr, i32 0, i32 0
+  %str_data = load ptr, ptr %str_data_slot
+  ; Get length
+  %str_len_slot = getelementptr %RuntimeString, ptr %str_ptr, i32 0, i32 1
+  %str_len = load i64, ptr %str_len_slot
+  ; Truncate length to i32 for printf precision
+  %str_len_32 = trunc i64 %str_len to i32
+  ; Print using %.*s format (precision, pointer)
+  %string_fmt = getelementptr [5 x i8], ptr @fmt_string, i32 0, i32 0
+  call i32 (ptr, ...) @printf(ptr %string_fmt, i32 %str_len_32, ptr %str_data)
   br label %done
 
 print_unknown:

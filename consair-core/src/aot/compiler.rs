@@ -390,11 +390,10 @@ impl AotCompiler {
                 Ok(codegen.compile_symbol(key))
             }
 
-            Value::Atom(AtomType::String(StringType::Basic(_s))) => {
-                // For now, return nil for strings (would need string runtime support)
-                Err(AotError::CodegenError(
-                    "String literals not yet supported in AOT".to_string(),
-                ))
+            Value::Atom(AtomType::String(StringType::Basic(s))) => {
+                // Generate a unique ID for this string literal
+                let unique_id = EXPR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                Ok(codegen.compile_string_literal(s, unique_id))
             }
 
             Value::Cons(cell) => {
@@ -664,23 +663,23 @@ impl AotCompiler {
                     );
                 }
                 "println" => {
-                    return self.compile_unary_op(
+                    return self.compile_variadic_print(
                         codegen,
-                        codegen.rt_println,
                         cdr,
                         env,
                         lambdas,
                         compiled_fns,
+                        true, // add newline
                     );
                 }
                 "print" => {
-                    return self.compile_unary_op(
+                    return self.compile_variadic_print(
                         codegen,
-                        codegen.rt_print,
                         cdr,
                         env,
                         lambdas,
                         compiled_fns,
+                        false, // no newline
                     );
                 }
                 "append" => {
@@ -1972,6 +1971,53 @@ impl AotCompiler {
             .ok_or_else(|| AotError::CodegenError("Unary op didn't return value".into()))?;
 
         Ok(result.into_struct_value())
+    }
+
+    /// Compile variadic print/println.
+    ///
+    /// Prints all arguments with spaces between them.
+    /// If `newline` is true, prints a newline at the end.
+    #[allow(clippy::too_many_arguments)]
+    fn compile_variadic_print<'ctx>(
+        &self,
+        codegen: &Codegen<'ctx>,
+        args: &Value,
+        env: &AotEnv<'ctx>,
+        lambdas: &LambdaStore,
+        compiled_fns: &CompiledFns<'ctx>,
+        newline: bool,
+    ) -> Result<StructValue<'ctx>, AotError> {
+        // Collect all arguments
+        let arg_values = self.collect_args(args)?;
+
+        // Print each argument, with spaces between them
+        for (i, arg) in arg_values.iter().enumerate() {
+            // Compile and print the argument
+            let val = self.compile_value(codegen, arg, env, lambdas, compiled_fns, false)?;
+            codegen
+                .builder
+                .build_call(codegen.rt_print, &[val.into()], "print_arg")
+                .unwrap();
+
+            // Print space between arguments (but not after the last one)
+            if i < arg_values.len() - 1 {
+                codegen
+                    .builder
+                    .build_call(codegen.rt_print_space, &[], "print_space")
+                    .unwrap();
+            }
+        }
+
+        // Print newline if requested
+        if newline {
+            codegen
+                .builder
+                .build_call(codegen.rt_print_newline, &[], "print_newline")
+                .unwrap();
+        }
+
+        // Return nil
+        Ok(codegen.compile_nil())
     }
 
     /// Compile minus (handles both negation and subtraction).

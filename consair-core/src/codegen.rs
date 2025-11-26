@@ -64,6 +64,11 @@ pub struct Codegen<'ctx> {
     // I/O functions
     pub rt_println: FunctionValue<'ctx>,
     pub rt_print: FunctionValue<'ctx>,
+    // String functions
+    pub rt_make_string: FunctionValue<'ctx>,
+    // Additional I/O helpers
+    pub rt_print_space: FunctionValue<'ctx>,
+    pub rt_print_newline: FunctionValue<'ctx>,
 }
 
 impl<'ctx> Codegen<'ctx> {
@@ -122,6 +127,11 @@ impl<'ctx> Codegen<'ctx> {
             // I/O functions
             rt_println: unsafe { std::mem::zeroed() },
             rt_print: unsafe { std::mem::zeroed() },
+            // String functions
+            rt_make_string: unsafe { std::mem::zeroed() },
+            // Additional I/O helpers
+            rt_print_space: unsafe { std::mem::zeroed() },
+            rt_print_newline: unsafe { std::mem::zeroed() },
         };
 
         // Declare all runtime functions
@@ -168,6 +178,13 @@ impl<'ctx> Codegen<'ctx> {
         // I/O functions
         codegen.rt_println = codegen.declare_unary_fn("rt_println");
         codegen.rt_print = codegen.declare_unary_fn("rt_print");
+
+        // String functions
+        codegen.rt_make_string = codegen.declare_make_string_fn();
+
+        // Additional I/O helpers
+        codegen.rt_print_space = codegen.declare_nullary_fn("rt_print_space");
+        codegen.rt_print_newline = codegen.declare_nullary_fn("rt_print_newline");
 
         codegen
     }
@@ -299,6 +316,23 @@ impl<'ctx> Codegen<'ctx> {
         )
     }
 
+    /// Declare rt_make_string: (ptr, i64) -> RuntimeValue
+    fn declare_make_string_fn(&self) -> FunctionValue<'ctx> {
+        let ptr_type = self
+            .context
+            .i8_type()
+            .ptr_type(inkwell::AddressSpace::default());
+        let i64_type = self.context.i64_type();
+        let fn_type = self
+            .value_type
+            .fn_type(&[ptr_type.into(), i64_type.into()], false);
+        self.module.add_function(
+            "rt_make_string",
+            fn_type,
+            Some(inkwell::module::Linkage::External),
+        )
+    }
+
     /// Get pointer type (opaque pointer in LLVM 17+)
     pub fn ptr_type(&self) -> inkwell::types::PointerType<'ctx> {
         self.context
@@ -385,6 +419,62 @@ impl<'ctx> Codegen<'ctx> {
     /// Compile a symbol literal from an interned symbol key.
     pub fn compile_symbol(&self, key: u64) -> inkwell::values::StructValue<'ctx> {
         self.const_runtime_value(crate::runtime::TAG_SYMBOL, key)
+    }
+
+    /// Compile a string literal.
+    ///
+    /// Creates a global constant for the string data and calls rt_make_string
+    /// to create a RuntimeString at runtime.
+    ///
+    /// # Arguments
+    /// * `s` - The string literal content
+    /// * `unique_id` - A unique ID to generate a unique global name
+    pub fn compile_string_literal(
+        &self,
+        s: &str,
+        unique_id: u64,
+    ) -> inkwell::values::StructValue<'ctx> {
+        // Create a global constant for the string data
+        let str_bytes = s.as_bytes();
+        let str_len = str_bytes.len() as u64;
+
+        // Create a constant array type for the string data
+        let i8_type = self.context.i8_type();
+        let array_type = i8_type.array_type(str_bytes.len() as u32);
+
+        // Create the constant array with the string bytes
+        let byte_values: Vec<_> = str_bytes
+            .iter()
+            .map(|&b| i8_type.const_int(b as u64, false))
+            .collect();
+        let const_array = i8_type.const_array(&byte_values);
+
+        // Add a global variable for the string data
+        let global_name = format!("__str_literal_{}", unique_id);
+        let global = self.module.add_global(array_type, None, &global_name);
+        global.set_initializer(&const_array);
+        global.set_constant(true);
+        global.set_linkage(inkwell::module::Linkage::Private);
+
+        // Get pointer to the string data
+        let str_ptr = global.as_pointer_value();
+
+        // Call rt_make_string(ptr, len)
+        let len_val = self.i64_type().const_int(str_len, false);
+        let result = self
+            .builder
+            .build_call(
+                self.rt_make_string,
+                &[str_ptr.into(), len_val.into()],
+                "make_string",
+            )
+            .unwrap();
+
+        result
+            .try_as_basic_value()
+            .left()
+            .unwrap()
+            .into_struct_value()
     }
 }
 

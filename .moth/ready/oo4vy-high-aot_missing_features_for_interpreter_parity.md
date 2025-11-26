@@ -2,23 +2,24 @@
 
 ## Summary
 
-The AOT compiler (`cadr`) is missing several features that the interpreter supports. This blocks running benchmarks like binary-trees that use string output.
+The AOT compiler (`cadr`) is missing several features that the interpreter supports.
+
+**Update**: String literals and variadic print are now implemented! The binary-trees benchmark now works with AOT.
+
+## Completed Features
+
+### String Literals ✓
+- **Status**: Implemented
+- Stores strings in LLVM data section as global constants
+- Creates RuntimeString via `rt_make_string` at runtime
+- Works with `println`, `print`, and all string operations
+
+### Variadic println/print ✓
+- **Status**: Implemented
+- `(println "x=" x " y=" y)` now works in AOT
+- Arguments separated by spaces, newline at end (for println)
 
 ## Missing Features
-
-### High Priority (blocks benchmarks)
-
-#### String Literals
-- **Status**: Not implemented
-- **Error**: `String literals not yet supported in AOT`
-- **Needed for**: Any program with string output
-- **Implementation**: Need to store strings in data section, return pointer in RuntimeValue
-
-#### Variadic println/print
-- **Status**: Only single argument supported
-- **Interpreter**: `(println "x=" x " y=" y)` works
-- **AOT**: Only `(println x)` works
-- **Implementation**: Loop over arguments, print each with space separator
 
 ### Medium Priority (extended features)
 
@@ -68,40 +69,19 @@ The AOT compiler (`cadr`) is missing several features that the interpreter suppo
 
 ## Implementation Notes
 
-### String Literals
-
-Strings need to be stored in the LLVM data section:
-
-```llvm
-@str.0 = private unnamed_addr constant [13 x i8] c"Hello World!\00"
-```
-
-RuntimeValue needs a TAG_STRING and pointer to string data.
-
-### Variadic Functions
-
-Option 1: Generate unrolled code for each argument
-Option 2: Build a list/vector of args, pass to runtime function
-
-### File Structure
+### File I/O Implementation
 
 New runtime functions should go in `aot/runtime_ir.rs`:
 - `rt_slurp(path: RuntimeValue) -> RuntimeValue`
 - `rt_spit(path: RuntimeValue, content: RuntimeValue) -> RuntimeValue`
 - `rt_shell(cmd: RuntimeValue) -> RuntimeValue`
-- `rt_now() -> RuntimeValue`
+- `rt_now() -> RuntimeValue` (stub exists, needs real implementation)
 
 ## Test Cases
 
-Once implemented, these should work:
+These features still need to work:
 
 ```lisp
-; String literals
-(println "Hello, World!")
-
-; Variadic print
-(println "Result:" (+ 1 2) "done")
-
 ; File I/O
 (spit "/tmp/test.txt" "data")
 (println (slurp "/tmp/test.txt"))
@@ -109,11 +89,16 @@ Once implemented, these should work:
 ; Shell
 (shell "echo hello")
 
-; Time
+; Time (real timestamp, not 0)
 (println "Timestamp:" (now))
 ```
 
-## Related
+## Benchmark Results
 
-- binary-trees benchmark needs strings for output
-- Most real-world programs need string support
+With string literals and variadic print implemented:
+
+| Mode | Time (binary-trees n=10) |
+|------|--------------------------|
+| Interpreter | 0.38s |
+| JIT | 0.38s |
+| **AOT** | **0.03s** (10x faster!) |
