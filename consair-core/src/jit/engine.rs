@@ -333,6 +333,12 @@ impl JitEngine {
 
             Value::Macro(_) => Err("Macros should be expanded before JIT compilation".to_string()),
 
+            Value::Map(_) => Err("JIT map literals not yet supported".to_string()),
+
+            Value::Set(_) => Err("JIT set literals not yet supported".to_string()),
+
+            Value::Reduced(_) => Err("JIT reduced values not yet supported".to_string()),
+
             Value::NativeFn(_) => Err("Native functions cannot be JIT compiled".to_string()),
         }
     }
@@ -1682,6 +1688,12 @@ impl JitEngine {
             Value::Lambda(_) => Err("Cannot quote lambdas".to_string()),
 
             Value::Macro(_) => Err("Cannot quote macros".to_string()),
+
+            Value::Map(_) => Err("Cannot quote maps in JIT".to_string()),
+
+            Value::Set(_) => Err("Cannot quote sets in JIT".to_string()),
+
+            Value::Reduced(_) => Err("Cannot quote reduced values in JIT".to_string()),
 
             Value::NativeFn(_) => Err("Cannot quote native functions".to_string()),
         }

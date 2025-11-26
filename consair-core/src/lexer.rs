@@ -179,7 +179,8 @@ impl Lexer {
 
     /// Check if character is valid in symbol (excluding '/' for namespace separator)
     fn is_symbol_char(&self, c: char) -> bool {
-        c.is_alphanumeric() || matches!(c, '-' | '_' | '+' | '*' | '!' | '?' | '<' | '>' | '=')
+        c.is_alphanumeric()
+            || matches!(c, '-' | '_' | '+' | '*' | '!' | '?' | '<' | '>' | '=' | '%')
     }
 
     /// Check if character is valid in symbol (including '/')
@@ -316,7 +317,11 @@ impl Lexer {
                 }
             }
             '<' => {
-                if self.peek_ahead(1) == '=' {
+                if self.peek_ahead(1) == '<' {
+                    self.advance();
+                    self.advance();
+                    Ok(Token::VectorOpen)
+                } else if self.peek_ahead(1) == '=' {
                     self.advance();
                     self.advance();
                     Ok(Token::Symbol("<=".to_string()))
@@ -326,7 +331,11 @@ impl Lexer {
                 }
             }
             '>' => {
-                if self.peek_ahead(1) == '=' {
+                if self.peek_ahead(1) == '>' {
+                    self.advance();
+                    self.advance();
+                    Ok(Token::VectorClose)
+                } else if self.peek_ahead(1) == '=' {
                     self.advance();
                     self.advance();
                     Ok(Token::Symbol(">=".to_string()))
@@ -357,6 +366,8 @@ impl Lexer {
 pub enum Token {
     LParen,
     RParen,
+    VectorOpen,  // <<
+    VectorClose, // >>
     Quote,
     Quasiquote,
     Unquote,

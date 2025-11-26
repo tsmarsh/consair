@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use crate::interner::InternedSymbol;
-use crate::language::{AtomType, SymbolType, Value, cons};
+use crate::language::{AtomType, SymbolType, Value, VectorValue, cons};
 use crate::lexer::{Lexer, Token};
 
 // ============================================================================
@@ -108,7 +110,24 @@ impl<'a> Parser<'a> {
                     .fold(Value::Nil, |acc, val| cons(val, acc));
                 Ok(list)
             }
+            Token::VectorOpen => {
+                self.advance()?;
+                let mut elements = Vec::new();
+
+                while !matches!(self.current_token, Token::VectorClose | Token::Eof) {
+                    elements.push(self.parse_expression()?);
+                }
+
+                if matches!(self.current_token, Token::Eof) {
+                    return Err("Unclosed vector literal".to_string());
+                }
+
+                self.advance()?; // consume >>
+
+                Ok(Value::Vector(Arc::new(VectorValue { elements })))
+            }
             Token::RParen => Err("Unexpected )".to_string()),
+            Token::VectorClose => Err("Unexpected >>".to_string()),
             Token::Eof => Err("Unexpected end of input".to_string()),
         }
     }

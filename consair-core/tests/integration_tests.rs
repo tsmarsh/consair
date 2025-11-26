@@ -126,3 +126,90 @@ fn test_nested_lambdas() {
         "(1 . 2)"
     );
 }
+
+// ============================================================================
+// Abstraction Tests (Clojure-inspired)
+// ============================================================================
+
+#[test]
+fn test_seq_builtin() {
+    assert_eq!(eval_expr("(%seq nil)"), "nil");
+    assert_eq!(eval_expr("(%seq '(1 2 3))"), "(1 2 3)");
+    assert_eq!(eval_expr("(%seq <<1 2 3>>)"), "(1 2 3)");
+}
+
+#[test]
+fn test_first_builtin() {
+    assert_eq!(eval_expr("(%first '(1 2 3))"), "1");
+    assert_eq!(eval_expr("(%first <<10 20>>)"), "10");
+    assert_eq!(eval_expr("(%first nil)"), "nil");
+}
+
+#[test]
+fn test_next_builtin() {
+    assert_eq!(eval_expr("(%next '(1 2 3))"), "(2 3)");
+    assert_eq!(eval_expr("(%next '(1))"), "nil");
+}
+
+#[test]
+fn test_count_builtin() {
+    assert_eq!(eval_expr("(%count nil)"), "0");
+    assert_eq!(eval_expr("(%count '(1 2 3))"), "3");
+    assert_eq!(eval_expr("(%count <<1 2 3 4 5>>)"), "5");
+}
+
+#[test]
+fn test_nth_builtin() {
+    assert_eq!(eval_expr("(%nth <<10 20 30>> 0)"), "10");
+    assert_eq!(eval_expr("(%nth <<10 20 30>> 1)"), "20");
+    assert_eq!(eval_expr("(%nth <<10 20 30>> 2)"), "30");
+    assert_eq!(eval_expr("(%nth <<1 2 3>> 10)"), "nil");
+    assert_eq!(eval_expr("(%nth <<1 2 3>> 10 42)"), "42");
+}
+
+#[test]
+fn test_hash_map_builtin() {
+    assert_eq!(eval_expr("(%count (%hash-map 1 2 3 4))"), "2");
+    assert_eq!(eval_expr("(%get (%hash-map 1 100 2 200) 1)"), "100");
+    assert_eq!(eval_expr("(%get (%hash-map 1 2) 999)"), "nil");
+}
+
+#[test]
+fn test_assoc_builtin() {
+    assert_eq!(eval_expr("(%get (%assoc (%hash-map) 1 100) 1)"), "100");
+}
+
+#[test]
+fn test_conj_builtin() {
+    // List conj adds at front
+    assert_eq!(eval_expr("(%first (%conj '(2 3) 1))"), "1");
+    // Vector conj adds at end
+    assert_eq!(eval_expr("(%nth (%conj <<1 2>> 3) 2)"), "3");
+}
+
+#[test]
+fn test_hash_set_builtin() {
+    assert_eq!(eval_expr("(%count (%hash-set 1 2 3))"), "3");
+    // Sets deduplicate
+    assert_eq!(eval_expr("(%count (%hash-set 1 1 1 2 2 3))"), "3");
+}
+
+#[test]
+fn test_reduced_builtin() {
+    assert_eq!(eval_expr("(%reduced? (%reduced 42))"), "t");
+    assert_eq!(eval_expr("(%reduced? 42)"), "nil");
+    assert_eq!(eval_expr("(%unreduced (%reduced 42))"), "42");
+}
+
+#[test]
+fn test_empty_builtin() {
+    assert_eq!(eval_expr("(%empty? nil)"), "t");
+    assert_eq!(eval_expr("(%empty? <<>>)"), "t");
+    assert_eq!(eval_expr("(%empty? <<1>>)"), "nil");
+}
+
+#[test]
+fn test_contains_builtin() {
+    assert_eq!(eval_expr("(%contains? (%hash-set 1 2 3) 2)"), "t");
+    assert_eq!(eval_expr("(%contains? (%hash-set 1 2 3) 999)"), "nil");
+}

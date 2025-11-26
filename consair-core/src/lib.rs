@@ -1,3 +1,4 @@
+pub mod abstractions;
 pub mod interner;
 pub mod interpreter;
 pub mod language;
@@ -20,8 +21,14 @@ pub mod runtime;
 pub use jit::{CompiledExpr, JitError, JitErrorKind};
 
 // Re-export commonly used items for convenience
+pub use abstractions::{
+    Seq, assoc, conj, count, first, get, hash_map, hash_set, is_callable, is_reduced, next, nth,
+    reduced, rest, seq, unreduced,
+};
 pub use interpreter::{Environment, eval, expand_all_macros, expand_macros};
-pub use language::{AtomType, ConsCell, LambdaCell, NativeFn, Value, VectorValue, cons};
+pub use language::{
+    AtomType, ConsCell, LambdaCell, MapValue, NativeFn, SetValue, Value, VectorValue, cons,
+};
 pub use numeric::NumericType;
 pub use parser::parse;
 pub use stdlib::register_stdlib;

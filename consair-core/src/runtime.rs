@@ -432,6 +432,12 @@ impl RuntimeValue {
 
             Value::Macro(_) => Err("Macros should be expanded before JIT compilation".to_string()),
 
+            Value::Map(_) => Err("JIT map conversion not yet supported".to_string()),
+
+            Value::Set(_) => Err("JIT set conversion not yet supported".to_string()),
+
+            Value::Reduced(_) => Err("JIT reduced conversion not yet supported".to_string()),
+
             Value::NativeFn(_) => {
                 Err("Native functions cannot be converted to RuntimeValue".to_string())
             }

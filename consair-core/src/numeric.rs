@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use num_bigint::BigInt as BigInteger;
@@ -93,6 +94,34 @@ impl PartialEq for NumericType {
 }
 
 impl Eq for NumericType {}
+
+impl Hash for NumericType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        use NumericType::*;
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Int(n) => n.hash(state),
+            BigInt(n) => n.to_string().hash(state),
+            Ratio(num, denom) => {
+                num.hash(state);
+                denom.hash(state);
+            }
+            BigRatio(r) => {
+                r.numer().to_string().hash(state);
+                r.denom().to_string().hash(state);
+            }
+            Float(x) => {
+                // Use bit representation for deterministic hashing
+                // NaN values all hash to the same value
+                if x.is_nan() {
+                    u64::MAX.hash(state);
+                } else {
+                    x.to_bits().hash(state);
+                }
+            }
+        }
+    }
+}
 
 impl PartialOrd for NumericType {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {

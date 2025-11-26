@@ -105,7 +105,18 @@ fn find_free_vars_helper(
                 find_free_vars_helper(elem, bound, free);
             }
         }
-        Value::Lambda(_) | Value::Macro(_) | Value::NativeFn(_) => {}
+        Value::Map(m) => {
+            for (k, v) in &m.entries {
+                find_free_vars_helper(k, bound, free);
+                find_free_vars_helper(v, bound, free);
+            }
+        }
+        Value::Set(s) => {
+            for elem in &s.elements {
+                find_free_vars_helper(elem, bound, free);
+            }
+        }
+        Value::Lambda(_) | Value::Macro(_) | Value::Reduced(_) | Value::NativeFn(_) => {}
     }
 }
 

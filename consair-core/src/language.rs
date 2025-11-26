@@ -1,4 +1,6 @@
+use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use crate::interner::InternedSymbol;
@@ -10,7 +12,7 @@ use crate::numeric::NumericType;
 // ============================================================================
 
 /// String type - only basic strings with escape sequences
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StringType {
     /// Basic string with escape sequences processed
     /// Syntax: "hello\nworld"
@@ -57,7 +59,19 @@ impl PartialEq for AtomType {
 
 impl Eq for AtomType {}
 
-#[derive(Clone, Debug, PartialEq)]
+impl Hash for AtomType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            AtomType::Symbol(s) => s.hash(state),
+            AtomType::Number(n) => n.hash(state),
+            AtomType::String(s) => s.hash(state),
+            AtomType::Bool(b) => b.hash(state),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ConsCell {
     pub car: Value,
     pub cdr: Value,
@@ -114,9 +128,65 @@ impl PartialEq for MacroCell {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VectorValue {
     pub elements: Vec<Value>,
+}
+
+/// Map value - persistent hash map
+#[derive(Clone, Debug)]
+pub struct MapValue {
+    pub entries: HashMap<Value, Value>,
+}
+
+impl PartialEq for MapValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.entries == other.entries
+    }
+}
+
+impl Eq for MapValue {}
+
+impl Hash for MapValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Hash by sorting keys for deterministic ordering
+        let mut pairs: Vec<_> = self.entries.iter().collect();
+        pairs.sort_by(|(k1, _), (k2, _)| {
+            // Use Display for consistent ordering
+            format!("{k1}").cmp(&format!("{k2}"))
+        });
+        state.write_usize(pairs.len());
+        for (k, v) in pairs {
+            k.hash(state);
+            v.hash(state);
+        }
+    }
+}
+
+/// Set value - persistent hash set
+#[derive(Clone, Debug)]
+pub struct SetValue {
+    pub elements: HashSet<Value>,
+}
+
+impl PartialEq for SetValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.elements == other.elements
+    }
+}
+
+impl Eq for SetValue {}
+
+impl Hash for SetValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Hash by sorting elements for deterministic ordering
+        let mut elems: Vec<_> = self.elements.iter().collect();
+        elems.sort_by(|a, b| format!("{a}").cmp(&format!("{b}")));
+        state.write_usize(elems.len());
+        for e in elems {
+            e.hash(state);
+        }
+    }
 }
 
 /// Native function type - Rust functions callable from Lisp
@@ -130,6 +200,10 @@ pub enum Value {
     Lambda(Arc<LambdaCell>),
     Macro(Arc<MacroCell>),
     Vector(Arc<VectorValue>),
+    Map(Arc<MapValue>),
+    Set(Arc<SetValue>),
+    /// Reduced wrapper - signals early termination in fold/reduce
+    Reduced(Box<Value>),
     NativeFn(NativeFn),
 }
 
@@ -143,11 +217,45 @@ impl PartialEq for Value {
             (Value::Lambda(a), Value::Lambda(b)) => a == b,
             (Value::Macro(a), Value::Macro(b)) => a == b,
             (Value::Vector(a), Value::Vector(b)) => a == b,
+            (Value::Map(a), Value::Map(b)) => a == b,
+            (Value::Set(a), Value::Set(b)) => a == b,
+            (Value::Reduced(a), Value::Reduced(b)) => a == b,
             (Value::NativeFn(a), Value::NativeFn(b)) => {
                 // Compare function pointers
                 std::ptr::eq(a as *const _, b as *const _)
             }
             _ => false,
+        }
+    }
+}
+
+impl Eq for Value {}
+
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Value::Atom(a) => a.hash(state),
+            Value::Cons(cell) => cell.hash(state),
+            Value::Nil => {}
+            Value::Lambda(lc) => {
+                // Hash params and body (consistent with PartialEq)
+                lc.params.hash(state);
+                lc.body.hash(state);
+            }
+            Value::Macro(mc) => {
+                // Hash params and body (consistent with PartialEq)
+                mc.params.hash(state);
+                mc.body.hash(state);
+            }
+            Value::Vector(v) => v.hash(state),
+            Value::Map(m) => m.hash(state),
+            Value::Set(s) => s.hash(state),
+            Value::Reduced(v) => v.hash(state),
+            Value::NativeFn(f) => {
+                // Hash function pointer address
+                (*f as usize).hash(state);
+            }
         }
     }
 }
@@ -234,6 +342,31 @@ impl fmt::Display for Value {
                 }
                 write!(f, ">>")
             }
+            Value::Map(map) => {
+                write!(f, "{{")?;
+                let mut first = true;
+                for (k, v) in &map.entries {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    write!(f, "{k} {v}")?;
+                }
+                write!(f, "}}")
+            }
+            Value::Set(set) => {
+                write!(f, "#{{")?;
+                let mut first = true;
+                for elem in &set.elements {
+                    if !first {
+                        write!(f, " ")?;
+                    }
+                    first = false;
+                    write!(f, "{elem}")?;
+                }
+                write!(f, "}}")
+            }
+            Value::Reduced(v) => write!(f, "#reduced({v})"),
             Value::NativeFn(_) => write!(f, "<native-fn>"),
         }
     }

@@ -11,7 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::interner::InternedSymbol;
 use crate::interpreter::Environment;
-use crate::language::{AtomType, SymbolType, Value};
+use crate::language::{AtomType, StringType, SymbolType, Value};
 use crate::native::{extract_string, make_int, make_string, vec_to_alist};
 use crate::numeric::NumericType;
 
@@ -526,6 +526,278 @@ pub fn vector(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
 }
 
 // ============================================================================
+// Engine Abstractions (Clojure-inspired)
+// ============================================================================
+
+/// Sequence abstraction - return a seq over a collection
+/// Usage: (%seq '(1 2 3)) => (1 2 3)
+/// Usage: (%seq <<1 2 3>>) => (1 2 3)
+pub fn builtin_seq(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("%seq: expected 1 argument".to_string());
+    }
+    Ok(crate::abstractions::seq(&args[0]).map_or(Value::Nil, |s| s.to_list()))
+}
+
+/// First element of a sequence
+/// Usage: (%first '(1 2 3)) => 1
+pub fn builtin_first(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("%first: expected 1 argument".to_string());
+    }
+    Ok(crate::abstractions::first(&args[0]))
+}
+
+/// Next elements of a sequence (rest, but returns nil for empty)
+/// Usage: (%next '(1 2 3)) => (2 3)
+pub fn builtin_next(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("%next: expected 1 argument".to_string());
+    }
+    Ok(crate::abstractions::next(&args[0]))
+}
+
+/// Rest of a sequence (like next but returns () for empty)
+/// Usage: (%rest '(1 2 3)) => (2 3)
+pub fn builtin_rest(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("%rest: expected 1 argument".to_string());
+    }
+    Ok(crate::abstractions::rest(&args[0]))
+}
+
+/// Count elements in a collection
+/// Usage: (%count '(1 2 3)) => 3
+pub fn builtin_count(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("%count: expected 1 argument".to_string());
+    }
+    crate::abstractions::count(&args[0])
+        .map(|n| Value::Atom(AtomType::Number(NumericType::Int(n as i64))))
+        .ok_or_else(|| format!("%count: cannot count {}", args[0]))
+}
+
+/// Get nth element of a collection
+/// Usage: (%nth <<1 2 3>> 1) => 2
+/// Usage: (%nth <<1 2 3>> 5 :default) => :default
+pub fn builtin_nth(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() < 2 || args.len() > 3 {
+        return Err("%nth: expected 2-3 arguments (coll, index, [default])".to_string());
+    }
+    let index = match &args[1] {
+        Value::Atom(AtomType::Number(NumericType::Int(n))) if *n >= 0 => *n as usize,
+        _ => return Err("%nth: index must be a non-negative integer".to_string()),
+    };
+    let default = args.get(2);
+    Ok(crate::abstractions::nth(&args[0], index, default))
+}
+
+/// Get value by key from collection
+/// Usage: (%get {:a 1 :b 2} :a) => 1
+/// Usage: (%get <<1 2 3>> 0) => 1
+pub fn builtin_get(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() < 2 || args.len() > 3 {
+        return Err("%get: expected 2-3 arguments (coll, key, [default])".to_string());
+    }
+    let default = args.get(2);
+    Ok(crate::abstractions::get(&args[0], &args[1], default))
+}
+
+/// Associate a key with a value in a collection
+/// Usage: (%assoc {:a 1} :b 2) => {:a 1 :b 2}
+/// Usage: (%assoc <<1 2 3>> 0 10) => <<10 2 3>>
+pub fn builtin_assoc(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() < 3 || args.len().is_multiple_of(2) {
+        return Err(
+            "%assoc: expected odd number of arguments >= 3 (coll, key, val, ...)".to_string(),
+        );
+    }
+    let mut result = args[0].clone();
+    for chunk in args[1..].chunks(2) {
+        result = crate::abstractions::assoc(&result, chunk[0].clone(), chunk[1].clone())?;
+    }
+    Ok(result)
+}
+
+/// Add item(s) to a collection
+/// Usage: (%conj '(2 3) 1) => (1 2 3)
+/// Usage: (%conj <<1 2>> 3) => <<1 2 3>>
+pub fn builtin_conj(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() < 2 {
+        return Err("%conj: expected at least 2 arguments (coll, item, ...)".to_string());
+    }
+    let mut result = args[0].clone();
+    for item in &args[1..] {
+        result = crate::abstractions::conj(&result, item.clone())?;
+    }
+    Ok(result)
+}
+
+/// Wrap a value in Reduced for early termination
+/// Usage: (%reduced 42) => #reduced(42)
+pub fn builtin_reduced(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("%reduced: expected 1 argument".to_string());
+    }
+    Ok(crate::abstractions::reduced(args[0].clone()))
+}
+
+/// Check if a value is reduced
+/// Usage: (%reduced? #reduced(42)) => t
+pub fn builtin_reduced_p(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("%reduced?: expected 1 argument".to_string());
+    }
+    Ok(Value::Atom(AtomType::Bool(
+        crate::abstractions::is_reduced(&args[0]),
+    )))
+}
+
+/// Unwrap a reduced value
+/// Usage: (%unreduced #reduced(42)) => 42
+pub fn builtin_unreduced(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("%unreduced: expected 1 argument".to_string());
+    }
+    Ok(crate::abstractions::unreduced(&args[0]))
+}
+
+/// Create a hash map from key-value pairs
+/// Usage: (%hash-map :a 1 :b 2) => {:a 1, :b 2}
+pub fn builtin_hash_map(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if !args.len().is_multiple_of(2) {
+        return Err("%hash-map: expected even number of arguments (key-value pairs)".to_string());
+    }
+    let pairs: Vec<(Value, Value)> = args
+        .chunks(2)
+        .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
+        .collect();
+    Ok(crate::abstractions::hash_map(pairs))
+}
+
+/// Create a hash set from elements
+/// Usage: (%hash-set 1 2 3) => #{1 2 3}
+pub fn builtin_hash_set(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    Ok(crate::abstractions::hash_set(args.to_vec()))
+}
+
+/// Check if a value is empty
+/// Usage: (%empty? '()) => t
+/// Usage: (%empty? <<>>) => t
+pub fn builtin_empty_p(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("%empty?: expected 1 argument".to_string());
+    }
+    let is_empty = match &args[0] {
+        Value::Nil => true,
+        Value::Cons(_) => false,
+        Value::Vector(v) => v.elements.is_empty(),
+        Value::Map(m) => m.entries.is_empty(),
+        Value::Set(s) => s.elements.is_empty(),
+        Value::Atom(AtomType::String(StringType::Basic(s))) => s.is_empty(),
+        _ => false,
+    };
+    Ok(Value::Atom(AtomType::Bool(is_empty)))
+}
+
+/// Check if a value contains a key/element
+/// Usage: (%contains? {:a 1} :a) => t
+/// Usage: (%contains? #{1 2 3} 2) => t
+pub fn builtin_contains_p(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("%contains?: expected 2 arguments (coll, key)".to_string());
+    }
+    let contains = match &args[0] {
+        Value::Map(m) => m.entries.contains_key(&args[1]),
+        Value::Set(s) => s.elements.contains(&args[1]),
+        Value::Vector(v) => {
+            if let Value::Atom(AtomType::Number(NumericType::Int(idx))) = &args[1] {
+                *idx >= 0 && (*idx as usize) < v.elements.len()
+            } else {
+                false
+            }
+        }
+        _ => false,
+    };
+    Ok(Value::Atom(AtomType::Bool(contains)))
+}
+
+/// Get keys from a map
+/// Usage: (%keys {:a 1 :b 2}) => (:a :b)
+pub fn builtin_keys(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("%keys: expected 1 argument".to_string());
+    }
+    match &args[0] {
+        Value::Map(m) => {
+            let mut result = Value::Nil;
+            for k in m.entries.keys() {
+                result = crate::language::cons(k.clone(), result);
+            }
+            Ok(result)
+        }
+        _ => Err(format!("%keys: expected map, got {}", args[0])),
+    }
+}
+
+/// Get values from a map
+/// Usage: (%vals {:a 1 :b 2}) => (1 2)
+pub fn builtin_vals(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("%vals: expected 1 argument".to_string());
+    }
+    match &args[0] {
+        Value::Map(m) => {
+            let mut result = Value::Nil;
+            for v in m.entries.values() {
+                result = crate::language::cons(v.clone(), result);
+            }
+            Ok(result)
+        }
+        _ => Err(format!("%vals: expected map, got {}", args[0])),
+    }
+}
+
+/// Remove a key from a map or element from a set
+/// Usage: (%dissoc {:a 1 :b 2} :a) => {:b 2}
+/// Usage: (%disj #{1 2 3} 2) => #{1 3}
+#[allow(clippy::mutable_key_type)]
+pub fn builtin_dissoc(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() < 2 {
+        return Err("%dissoc: expected at least 2 arguments (map, key, ...)".to_string());
+    }
+    match &args[0] {
+        Value::Map(m) => {
+            let mut entries = m.entries.clone();
+            for key in &args[1..] {
+                entries.remove(key);
+            }
+            Ok(Value::Map(Arc::new(crate::language::MapValue { entries })))
+        }
+        _ => Err(format!("%dissoc: expected map, got {}", args[0])),
+    }
+}
+
+/// Remove an element from a set
+/// Usage: (%disj #{1 2 3} 2) => #{1 3}
+#[allow(clippy::mutable_key_type)]
+pub fn builtin_disj(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() < 2 {
+        return Err("%disj: expected at least 2 arguments (set, elem, ...)".to_string());
+    }
+    match &args[0] {
+        Value::Set(s) => {
+            let mut elements = s.elements.clone();
+            for elem in &args[1..] {
+                elements.remove(elem);
+            }
+            Ok(Value::Set(Arc::new(crate::language::SetValue { elements })))
+        }
+        _ => Err(format!("%disj: expected set, got {}", args[0])),
+    }
+}
+
+// ============================================================================
 // Registration
 // ============================================================================
 
@@ -572,4 +844,29 @@ pub fn register_stdlib(env: &mut Environment) {
 
     // Vector constructor (de-sugaring vector syntax)
     env.define("vector".to_string(), Value::NativeFn(vector));
+
+    // Engine abstractions (Clojure-inspired)
+    env.define("%seq".to_string(), Value::NativeFn(builtin_seq));
+    env.define("%first".to_string(), Value::NativeFn(builtin_first));
+    env.define("%next".to_string(), Value::NativeFn(builtin_next));
+    env.define("%rest".to_string(), Value::NativeFn(builtin_rest));
+    env.define("%count".to_string(), Value::NativeFn(builtin_count));
+    env.define("%nth".to_string(), Value::NativeFn(builtin_nth));
+    env.define("%get".to_string(), Value::NativeFn(builtin_get));
+    env.define("%assoc".to_string(), Value::NativeFn(builtin_assoc));
+    env.define("%conj".to_string(), Value::NativeFn(builtin_conj));
+    env.define("%reduced".to_string(), Value::NativeFn(builtin_reduced));
+    env.define("%reduced?".to_string(), Value::NativeFn(builtin_reduced_p));
+    env.define("%unreduced".to_string(), Value::NativeFn(builtin_unreduced));
+    env.define("%hash-map".to_string(), Value::NativeFn(builtin_hash_map));
+    env.define("%hash-set".to_string(), Value::NativeFn(builtin_hash_set));
+    env.define("%empty?".to_string(), Value::NativeFn(builtin_empty_p));
+    env.define(
+        "%contains?".to_string(),
+        Value::NativeFn(builtin_contains_p),
+    );
+    env.define("%keys".to_string(), Value::NativeFn(builtin_keys));
+    env.define("%vals".to_string(), Value::NativeFn(builtin_vals));
+    env.define("%dissoc".to_string(), Value::NativeFn(builtin_dissoc));
+    env.define("%disj".to_string(), Value::NativeFn(builtin_disj));
 }
