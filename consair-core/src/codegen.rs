@@ -61,6 +61,9 @@ pub struct Codegen<'ctx> {
     pub rt_make_vector: FunctionValue<'ctx>,
     pub rt_vector_length: FunctionValue<'ctx>,
     pub rt_vector_ref: FunctionValue<'ctx>,
+    // I/O functions
+    pub rt_println: FunctionValue<'ctx>,
+    pub rt_print: FunctionValue<'ctx>,
 }
 
 impl<'ctx> Codegen<'ctx> {
@@ -116,6 +119,9 @@ impl<'ctx> Codegen<'ctx> {
             rt_make_vector: unsafe { std::mem::zeroed() },
             rt_vector_length: unsafe { std::mem::zeroed() },
             rt_vector_ref: unsafe { std::mem::zeroed() },
+            // I/O functions
+            rt_println: unsafe { std::mem::zeroed() },
+            rt_print: unsafe { std::mem::zeroed() },
         };
 
         // Declare all runtime functions
@@ -158,6 +164,10 @@ impl<'ctx> Codegen<'ctx> {
         codegen.rt_make_vector = codegen.declare_make_vector_fn();
         codegen.rt_vector_length = codegen.declare_unary_fn("rt_vector_length");
         codegen.rt_vector_ref = codegen.declare_binary_fn("rt_vector_ref");
+
+        // I/O functions
+        codegen.rt_println = codegen.declare_unary_fn("rt_println");
+        codegen.rt_print = codegen.declare_unary_fn("rt_print");
 
         codegen
     }

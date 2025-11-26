@@ -122,11 +122,42 @@ impl AotCompiler {
         let context = Context::create();
         let codegen = Codegen::new(&context, "consair_aot");
 
-        // Compile expressions
+        // First pass: collect top-level label definitions and pre-declare functions
+        let mut compiled_fns: CompiledFns<'_> = HashMap::new();
+        let mut label_lambdas: Vec<(InternedSymbol, Value)> = Vec::new();
+
+        for expr in &exprs {
+            if let Some((name, lambda_expr)) = extract_toplevel_label(expr) {
+                // Parse the lambda to get parameter count
+                let param_count = self.get_lambda_param_count(&lambda_expr)?;
+
+                // Generate unique function name
+                let counter = EXPR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let fn_name = format!("__consair_labeled_{}_{}", name.resolve(), counter);
+
+                // Create the function type based on parameter count
+                let param_types: Vec<inkwell::types::BasicMetadataTypeEnum> = (0..param_count)
+                    .map(|_| codegen.value_type.into())
+                    .collect();
+                let fn_type = codegen.value_type.fn_type(&param_types, false);
+
+                // Declare the function
+                let function = codegen.module.add_function(&fn_name, fn_type, None);
+                compiled_fns.insert(name, function);
+                label_lambdas.push((name, lambda_expr));
+            }
+        }
+
+        // Second pass: compile all labeled lambda bodies
+        for (name, lambda_expr) in &label_lambdas {
+            self.compile_toplevel_label(&codegen, *name, lambda_expr, &compiled_fns)?;
+        }
+
+        // Third pass: compile all expressions with shared compiled_fns
         let mut expr_fns = Vec::new();
         for (i, expr) in exprs.iter().enumerate() {
             let fn_name = format!("__consair_expr_{}", i);
-            let func = self.compile_expr_to_function(&codegen, &fn_name, expr)?;
+            let func = self.compile_expr_to_function(&codegen, &fn_name, expr, &compiled_fns)?;
             expr_fns.push(func);
         }
 
@@ -183,6 +214,7 @@ impl AotCompiler {
         codegen: &Codegen<'ctx>,
         name: &str,
         expr: &Value,
+        compiled_fns: &CompiledFns<'ctx>,
     ) -> Result<FunctionValue<'ctx>, AotError> {
         // Create the function
         let fn_type = codegen.expr_fn_type();
@@ -195,15 +227,120 @@ impl AotCompiler {
         // Initialize empty environments for top-level compilation
         let env: AotEnv<'ctx> = HashMap::new();
         let lambdas: LambdaStore = HashMap::new();
-        let compiled_fns: CompiledFns<'ctx> = HashMap::new();
 
         // Compile the expression (top-level is in tail position)
-        let result = self.compile_value(codegen, expr, &env, &lambdas, &compiled_fns, true)?;
+        let result = self.compile_value(codegen, expr, &env, &lambdas, compiled_fns, true)?;
 
         // Return the result
         codegen.builder.build_return(Some(&result)).unwrap();
 
         Ok(function)
+    }
+
+    /// Get the parameter count from a lambda expression.
+    fn get_lambda_param_count(&self, lambda_expr: &Value) -> Result<usize, AotError> {
+        if let Value::Cons(lambda_cell) = lambda_expr
+            && let Value::Atom(AtomType::Symbol(SymbolType::Symbol(lambda_sym))) = &lambda_cell.car
+            && lambda_sym.resolve() == "lambda"
+        {
+            let lambda_parts = self.collect_args(&lambda_cell.cdr)?;
+            if lambda_parts.is_empty() {
+                return Err(AotError::CodegenError(
+                    "lambda requires parameters".to_string(),
+                ));
+            }
+            let params = &lambda_parts[0];
+            let param_names = self.collect_args(params)?;
+            return Ok(param_names.len());
+        }
+        Err(AotError::CodegenError(
+            "Expected lambda expression".to_string(),
+        ))
+    }
+
+    /// Compile a top-level label definition.
+    /// This compiles the body of a pre-declared labeled function.
+    fn compile_toplevel_label<'ctx>(
+        &self,
+        codegen: &Codegen<'ctx>,
+        name: InternedSymbol,
+        lambda_expr: &Value,
+        compiled_fns: &CompiledFns<'ctx>,
+    ) -> Result<(), AotError> {
+        // Get the function we declared earlier
+        let function = compiled_fns.get(&name).ok_or_else(|| {
+            AotError::CodegenError(format!("Function {} not pre-declared", name.resolve()))
+        })?;
+
+        // Parse the lambda to get parameters and body
+        let (param_symbols, body) = if let Value::Cons(lambda_cell) = lambda_expr {
+            if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(lambda_sym))) = &lambda_cell.car
+            {
+                if lambda_sym.resolve() == "lambda" {
+                    let lambda_parts = self.collect_args(&lambda_cell.cdr)?;
+                    if lambda_parts.len() < 2 {
+                        return Err(AotError::CodegenError(
+                            "lambda requires parameters and body".to_string(),
+                        ));
+                    }
+                    let params = &lambda_parts[0];
+                    let body = lambda_parts[1].clone();
+
+                    let param_names = self.collect_args(params)?;
+                    let param_symbols: Vec<InternedSymbol> = param_names
+                        .iter()
+                        .map(|p| {
+                            if let Value::Atom(AtomType::Symbol(SymbolType::Symbol(sym))) = p {
+                                Ok(*sym)
+                            } else {
+                                Err(AotError::CodegenError(
+                                    "lambda parameters must be symbols".to_string(),
+                                ))
+                            }
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    (param_symbols, body)
+                } else {
+                    return Err(AotError::CodegenError(
+                        "Expected lambda expression".to_string(),
+                    ));
+                }
+            } else {
+                return Err(AotError::CodegenError(
+                    "Expected lambda expression".to_string(),
+                ));
+            }
+        } else {
+            return Err(AotError::CodegenError(
+                "Expected lambda expression".to_string(),
+            ));
+        };
+
+        // Create entry block for the function
+        let entry = codegen.context.append_basic_block(*function, "entry");
+        codegen.builder.position_at_end(entry);
+
+        // Create environment with parameters bound to function arguments
+        let mut fn_env: AotEnv<'ctx> = HashMap::new();
+        for (i, sym) in param_symbols.iter().enumerate() {
+            let param = function
+                .get_nth_param(i as u32)
+                .ok_or_else(|| {
+                    AotError::CodegenError("Failed to get function parameter".to_string())
+                })?
+                .into_struct_value();
+            fn_env.insert(*sym, param);
+        }
+
+        let lambdas: LambdaStore = HashMap::new();
+
+        // Compile the body with the environment and compiled_fns (body is in tail position)
+        let result = self.compile_value(codegen, &body, &fn_env, &lambdas, compiled_fns, true)?;
+
+        // Return the result
+        codegen.builder.build_return(Some(&result)).unwrap();
+
+        Ok(())
     }
 
     /// Compile a Value to LLVM IR.
@@ -301,6 +438,20 @@ impl AotCompiler {
             let name = sym.resolve();
             match name.as_str() {
                 "quote" => return self.compile_quote(codegen, cdr),
+                "label" => {
+                    // Check if this is a top-level label that was pre-compiled
+                    // If so, the function already exists in compiled_fns; just return nil
+                    // cdr is (name (lambda ...))
+                    if let Value::Cons(name_cell) = cdr
+                        && let Value::Atom(AtomType::Symbol(SymbolType::Symbol(label_name))) =
+                            &name_cell.car
+                        && compiled_fns.contains_key(label_name)
+                    {
+                        // Already compiled, return nil
+                        return Ok(codegen.compile_nil());
+                    }
+                    // Otherwise fall through to handle inline label calls
+                }
                 "if" => {
                     return self.compile_if(
                         codegen,
@@ -402,7 +553,7 @@ impl AotCompiler {
                         compiled_fns,
                     );
                 }
-                "eq?" => {
+                "eq" => {
                     return self.compile_binary_op(
                         codegen,
                         codegen.rt_eq,
@@ -422,7 +573,7 @@ impl AotCompiler {
                         compiled_fns,
                     );
                 }
-                "atom?" => {
+                "atom" => {
                     return self.compile_unary_op(
                         codegen,
                         codegen.rt_is_atom,
@@ -506,6 +657,26 @@ impl AotCompiler {
                     return self.compile_unary_op(
                         codegen,
                         codegen.rt_reverse,
+                        cdr,
+                        env,
+                        lambdas,
+                        compiled_fns,
+                    );
+                }
+                "println" => {
+                    return self.compile_unary_op(
+                        codegen,
+                        codegen.rt_println,
+                        cdr,
+                        env,
+                        lambdas,
+                        compiled_fns,
+                    );
+                }
+                "print" => {
+                    return self.compile_unary_op(
+                        codegen,
+                        codegen.rt_print,
                         cdr,
                         env,
                         lambdas,
@@ -2135,6 +2306,30 @@ fn is_label(value: &Value) -> bool {
     )
 }
 
+/// Check if an expression is a top-level label definition: (label name (lambda ...))
+/// Returns Some((name, lambda_expr)) if it is, None otherwise.
+fn extract_toplevel_label(expr: &Value) -> Option<(InternedSymbol, Value)> {
+    if let Value::Cons(cell) = expr
+        && is_label(&cell.car)
+    {
+        // Get (name (lambda ...))
+        if let Value::Cons(name_cell) = &cell.cdr
+            && let Value::Atom(AtomType::Symbol(SymbolType::Symbol(name))) = &name_cell.car
+        {
+            // Get ((lambda ...))
+            if let Value::Cons(lambda_cell) = &name_cell.cdr
+                && let Value::Cons(lambda_inner) = &lambda_cell.car
+                && let Value::Atom(AtomType::Symbol(SymbolType::Symbol(lambda_kw))) =
+                    &lambda_inner.car
+                && lambda_kw.resolve() == "lambda"
+            {
+                return Some((*name, lambda_cell.car.clone()));
+            }
+        }
+    }
+    None
+}
+
 /// Convert an InternedSymbol to a u64 key by copying its bytes.
 fn symbol_to_key(sym: &InternedSymbol) -> u64 {
     let mut key: u64 = 0;
@@ -2327,7 +2522,8 @@ mod tests {
         let ir = compiler.compile_source("(nil? nil)").unwrap();
         assert!(ir.contains("@rt_is_nil"));
 
-        let ir = compiler.compile_source("(atom? 42)").unwrap();
+        // Note: atom is the McCarthy primitive name (not atom?)
+        let ir = compiler.compile_source("(atom 42)").unwrap();
         assert!(ir.contains("@rt_is_atom"));
 
         let ir = compiler.compile_source("(cons? (quote (1)))").unwrap();

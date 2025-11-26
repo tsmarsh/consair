@@ -324,6 +324,182 @@ pub fn cons_fn(args: &[Value], _env: &mut Environment) -> Result<Value, String> 
 }
 
 // ============================================================================
+// Type Predicates (for JIT/AOT parity)
+// ============================================================================
+
+/// Test if value is nil
+pub fn nil_p(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("nil?: expected 1 argument".to_string());
+    }
+    Ok(Value::Atom(AtomType::Bool(matches!(args[0], Value::Nil))))
+}
+
+/// Test if value is a cons cell (list)
+pub fn cons_p(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("cons?: expected 1 argument".to_string());
+    }
+    Ok(Value::Atom(AtomType::Bool(matches!(
+        args[0],
+        Value::Cons(_)
+    ))))
+}
+
+/// Test if value is a number
+pub fn number_p(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("number?: expected 1 argument".to_string());
+    }
+    let is_num = matches!(args[0], Value::Atom(AtomType::Number(_)));
+    Ok(Value::Atom(AtomType::Bool(is_num)))
+}
+
+/// Logical not
+pub fn not_fn(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("not: expected 1 argument".to_string());
+    }
+    let is_false = matches!(args[0], Value::Nil | Value::Atom(AtomType::Bool(false)));
+    Ok(Value::Atom(AtomType::Bool(is_false)))
+}
+
+// ============================================================================
+// List Operations (for JIT/AOT parity)
+// ============================================================================
+
+/// Get length of a list
+pub fn length(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("length: expected 1 argument".to_string());
+    }
+    let mut count: i64 = 0;
+    let mut current = &args[0];
+    while let Value::Cons(cell) = current {
+        count += 1;
+        current = &cell.cdr;
+    }
+    Ok(make_int(count))
+}
+
+/// Append two lists
+pub fn append(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("append: expected 2 arguments".to_string());
+    }
+
+    // If first list is nil, return second
+    if matches!(args[0], Value::Nil) {
+        return Ok(args[1].clone());
+    }
+
+    // Collect elements from first list
+    let mut elements = Vec::new();
+    let mut current = &args[0];
+    while let Value::Cons(cell) = current {
+        elements.push(cell.car.clone());
+        current = &cell.cdr;
+    }
+
+    // Build result by consing onto second list
+    let mut result = args[1].clone();
+    for elem in elements.into_iter().rev() {
+        result = crate::language::cons(elem, result);
+    }
+    Ok(result)
+}
+
+/// Reverse a list
+pub fn reverse(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("reverse: expected 1 argument".to_string());
+    }
+
+    let mut result = Value::Nil;
+    let mut current = &args[0];
+    while let Value::Cons(cell) = current {
+        result = crate::language::cons(cell.car.clone(), result);
+        current = &cell.cdr;
+    }
+    Ok(result)
+}
+
+/// Create a list from arguments
+pub fn list(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    let mut result = Value::Nil;
+    for arg in args.iter().rev() {
+        result = crate::language::cons(arg.clone(), result);
+    }
+    Ok(result)
+}
+
+/// Get nth element of a list (0-indexed)
+pub fn nth(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("nth: expected 2 arguments (list, index)".to_string());
+    }
+
+    let n = match &args[1] {
+        Value::Atom(AtomType::Number(NumericType::Int(i))) => *i as usize,
+        _ => return Err("nth: index must be an integer".to_string()),
+    };
+
+    let mut current = &args[0];
+    let mut i = 0;
+    while let Value::Cons(cell) = current {
+        if i == n {
+            return Ok(cell.car.clone());
+        }
+        i += 1;
+        current = &cell.cdr;
+    }
+
+    Ok(Value::Nil) // Return nil if index out of bounds
+}
+
+// ============================================================================
+// Vector Operations (for JIT/AOT parity)
+// ============================================================================
+
+/// Get length of a vector
+pub fn vector_length(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("vector-length: expected 1 argument".to_string());
+    }
+    match &args[0] {
+        Value::Vector(v) => Ok(make_int(v.elements.len() as i64)),
+        _ => Err(format!("vector-length: expected vector, got {}", args[0])),
+    }
+}
+
+/// Get element from vector by index
+pub fn vector_ref(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("vector-ref: expected 2 arguments (vector, index)".to_string());
+    }
+
+    let vec = match &args[0] {
+        Value::Vector(v) => v,
+        _ => return Err(format!("vector-ref: expected vector, got {}", args[0])),
+    };
+
+    let idx = match &args[1] {
+        Value::Atom(AtomType::Number(NumericType::Int(i))) => *i as usize,
+        _ => return Err("vector-ref: index must be an integer".to_string()),
+    };
+
+    if idx < vec.elements.len() {
+        Ok(vec.elements[idx].clone())
+    } else {
+        Err(format!(
+            "vector-ref: index {} out of bounds for vector of length {}",
+            idx,
+            vec.elements.len()
+        ))
+    }
+}
+
+// ============================================================================
 // Arithmetic Operations (de-sugared from special forms)
 // ============================================================================
 
@@ -828,6 +1004,23 @@ pub fn register_stdlib(env: &mut Environment) {
     env.define("car".to_string(), Value::NativeFn(car));
     env.define("cdr".to_string(), Value::NativeFn(cdr));
     env.define("cons".to_string(), Value::NativeFn(cons_fn));
+
+    // Type predicates (for JIT/AOT parity)
+    env.define("nil?".to_string(), Value::NativeFn(nil_p));
+    env.define("cons?".to_string(), Value::NativeFn(cons_p));
+    env.define("number?".to_string(), Value::NativeFn(number_p));
+    env.define("not".to_string(), Value::NativeFn(not_fn));
+
+    // List operations (for JIT/AOT parity)
+    env.define("length".to_string(), Value::NativeFn(length));
+    env.define("append".to_string(), Value::NativeFn(append));
+    env.define("reverse".to_string(), Value::NativeFn(reverse));
+    env.define("list".to_string(), Value::NativeFn(list));
+    env.define("nth".to_string(), Value::NativeFn(nth));
+
+    // Vector operations (for JIT/AOT parity)
+    env.define("vector-length".to_string(), Value::NativeFn(vector_length));
+    env.define("vector-ref".to_string(), Value::NativeFn(vector_ref));
 
     // Arithmetic operations (de-sugaring special forms)
     env.define("+".to_string(), Value::NativeFn(add));

@@ -24,8 +24,11 @@ pub fn generate_runtime_ir() -> String {
     // Runtime function definitions
     ir.push_str(&generate_runtime_functions());
 
-    // Print function for main
+    // Print function for main (print_value, print_list)
     ir.push_str(&generate_print_result());
+
+    // I/O functions (depend on print_value, so must come after)
+    ir.push_str(&generate_io_functions());
 
     ir
 }
@@ -135,6 +138,14 @@ fn generate_runtime_functions() -> String {
     // Utility
     ir.push_str(&generate_rt_now());
 
+    ir
+}
+
+/// Generate I/O functions (these depend on print_value, so must come after generate_print_result)
+fn generate_io_functions() -> String {
+    let mut ir = String::new();
+    ir.push_str(&generate_rt_println());
+    ir.push_str(&generate_rt_print());
     ir
 }
 
@@ -1169,6 +1180,42 @@ entry:
 }
 "#
     .to_string()
+}
+
+fn generate_rt_println() -> String {
+    format!(
+        r#"
+; rt_println: Print a RuntimeValue followed by newline, return nil
+define %RuntimeValue @rt_println(%RuntimeValue %val) {{
+entry:
+  call void @print_value(%RuntimeValue %val)
+  %newline_fmt = getelementptr [2 x i8], ptr @fmt_newline, i32 0, i32 0
+  call i32 (ptr, ...) @printf(ptr %newline_fmt)
+
+  ; Return nil
+  %nil1 = insertvalue %RuntimeValue undef, i8 {TAG_NIL}, 0
+  %nil2 = insertvalue %RuntimeValue %nil1, i64 0, 1
+  ret %RuntimeValue %nil2
+}}
+"#
+    )
+}
+
+fn generate_rt_print() -> String {
+    format!(
+        r#"
+; rt_print: Print a RuntimeValue without newline, return nil
+define %RuntimeValue @rt_print(%RuntimeValue %val) {{
+entry:
+  call void @print_value(%RuntimeValue %val)
+
+  ; Return nil
+  %nil1 = insertvalue %RuntimeValue undef, i8 {TAG_NIL}, 0
+  %nil2 = insertvalue %RuntimeValue %nil1, i64 0, 1
+  ret %RuntimeValue %nil2
+}}
+"#
+    )
 }
 
 fn generate_print_result() -> String {

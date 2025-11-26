@@ -378,6 +378,7 @@ impl JitEngine {
                 "cond" => {
                     self.compile_cond(codegen, args, env, lambdas, compiled_fns, tail_position)
                 }
+                "if" => self.compile_if(codegen, args, env, lambdas, compiled_fns, tail_position),
                 "lambda" => self.compile_closure(codegen, args, env, lambdas, compiled_fns),
                 "label" => self.compile_label(codegen, args, env, lambdas, compiled_fns),
                 // List operations
@@ -1617,6 +1618,167 @@ impl JitEngine {
         for (val, block) in &phi_incoming {
             phi.add_incoming(&[(val, *block)]);
         }
+
+        Ok(phi.as_basic_value().into_struct_value())
+    }
+
+    /// Compile an if expression: (if test then else)
+    fn compile_if<'ctx>(
+        &self,
+        codegen: &Codegen<'ctx>,
+        args: &Value,
+        env: &JitEnv<'ctx>,
+        lambdas: &LambdaStore,
+        compiled_fns: &CompiledFns<'ctx>,
+        tail_position: bool,
+    ) -> Result<inkwell::values::StructValue<'ctx>, String> {
+        let arg_values = self.collect_args(args)?;
+
+        // (if test then else) or (if test then)
+        if arg_values.len() < 2 || arg_values.len() > 3 {
+            return Err("if requires 2 or 3 arguments (if test then [else])".to_string());
+        }
+
+        let test_expr = &arg_values[0];
+        let then_expr = &arg_values[1];
+        let else_expr = arg_values.get(2);
+
+        // Get the current function
+        let current_block = codegen
+            .builder
+            .get_insert_block()
+            .ok_or("No current block")?;
+        let function = current_block
+            .get_parent()
+            .ok_or("Block has no parent function")?;
+
+        // Compile the test expression (test is NOT in tail position)
+        let test_val = self.compile_value(codegen, test_expr, env, lambdas, compiled_fns, false)?;
+
+        // Check if test is truthy (not nil and not false)
+        let tag = codegen
+            .builder
+            .build_extract_value(test_val, 0, "tag")
+            .map_err(|e| e.to_string())?
+            .into_int_value();
+
+        let data = codegen
+            .builder
+            .build_extract_value(test_val, 1, "data")
+            .map_err(|e| e.to_string())?
+            .into_int_value();
+
+        // Check if tag == TAG_NIL
+        let is_nil = codegen
+            .builder
+            .build_int_compare(
+                inkwell::IntPredicate::EQ,
+                tag,
+                codegen
+                    .i8_type()
+                    .const_int(crate::runtime::TAG_NIL as u64, false),
+                "is_nil",
+            )
+            .map_err(|e| e.to_string())?;
+
+        // Check if tag == TAG_BOOL and data == 0 (false)
+        let is_bool = codegen
+            .builder
+            .build_int_compare(
+                inkwell::IntPredicate::EQ,
+                tag,
+                codegen
+                    .i8_type()
+                    .const_int(crate::runtime::TAG_BOOL as u64, false),
+                "is_bool",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let is_false_data = codegen
+            .builder
+            .build_int_compare(
+                inkwell::IntPredicate::EQ,
+                data,
+                codegen.i64_type().const_int(0, false),
+                "is_false_data",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let is_false = codegen
+            .builder
+            .build_and(is_bool, is_false_data, "is_false")
+            .map_err(|e| e.to_string())?;
+
+        // Falsy if nil OR (bool AND data==0)
+        let is_falsy = codegen
+            .builder
+            .build_or(is_nil, is_false, "is_falsy")
+            .map_err(|e| e.to_string())?;
+
+        // Create blocks
+        let then_block = self.context.append_basic_block(function, "if_then");
+        let else_block = self.context.append_basic_block(function, "if_else");
+        let merge_block = self.context.append_basic_block(function, "if_merge");
+
+        // Branch based on truthiness (if falsy, go to else; if truthy, go to then)
+        codegen
+            .builder
+            .build_conditional_branch(is_falsy, else_block, then_block)
+            .map_err(|e| e.to_string())?;
+
+        // Compile then block
+        codegen.builder.position_at_end(then_block);
+        let then_val = self.compile_value(
+            codegen,
+            then_expr,
+            env,
+            lambdas,
+            compiled_fns,
+            tail_position,
+        )?;
+        let then_end = codegen
+            .builder
+            .get_insert_block()
+            .ok_or("No current block")?;
+        codegen
+            .builder
+            .build_unconditional_branch(merge_block)
+            .map_err(|e| e.to_string())?;
+
+        // Compile else block
+        codegen.builder.position_at_end(else_block);
+        let else_val = if let Some(else_expr) = else_expr {
+            self.compile_value(
+                codegen,
+                else_expr,
+                env,
+                lambdas,
+                compiled_fns,
+                tail_position,
+            )?
+        } else {
+            codegen.compile_nil()
+        };
+        let else_end = codegen
+            .builder
+            .get_insert_block()
+            .ok_or("No current block")?;
+        codegen
+            .builder
+            .build_unconditional_branch(merge_block)
+            .map_err(|e| e.to_string())?;
+
+        // Create phi node at merge
+        codegen.builder.position_at_end(merge_block);
+        let phi = codegen
+            .builder
+            .build_phi(codegen.value_type, "if_result")
+            .map_err(|e| e.to_string())?;
+
+        let then_basic: inkwell::values::BasicValueEnum = then_val.into();
+        let else_basic: inkwell::values::BasicValueEnum = else_val.into();
+        phi.add_incoming(&[(&then_basic, then_end)]);
+        phi.add_incoming(&[(&else_basic, else_end)]);
 
         Ok(phi.as_basic_value().into_struct_value())
     }
