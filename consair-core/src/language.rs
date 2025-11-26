@@ -2,11 +2,8 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-#[cfg(not(feature = "persistent"))]
-use rustc_hash::{FxHashMap, FxHashSet};
-
-#[cfg(feature = "persistent")]
 use im::{HashMap as ImHashMap, HashSet as ImHashSet, Vector as ImVector};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::interner::InternedSymbol;
 use crate::interpreter::Environment;
@@ -133,31 +130,27 @@ impl PartialEq for MacroCell {
     }
 }
 
-/// Vector value - uses Vec or im::Vector depending on feature
-#[cfg(not(feature = "persistent"))]
+/// Vector value - fast mutable vector using Vec
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VectorValue {
     pub elements: Vec<Value>,
 }
 
-#[cfg(feature = "persistent")]
+/// Persistent vector - immutable with structural sharing using im::Vector
 #[derive(Clone, Debug)]
-pub struct VectorValue {
+pub struct PersistentVector {
     pub elements: ImVector<Value>,
 }
 
-#[cfg(feature = "persistent")]
-impl PartialEq for VectorValue {
+impl PartialEq for PersistentVector {
     fn eq(&self, other: &Self) -> bool {
         self.elements == other.elements
     }
 }
 
-#[cfg(feature = "persistent")]
-impl Eq for VectorValue {}
+impl Eq for PersistentVector {}
 
-#[cfg(feature = "persistent")]
-impl Hash for VectorValue {
+impl Hash for PersistentVector {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_usize(self.elements.len());
         for elem in &self.elements {
@@ -166,57 +159,20 @@ impl Hash for VectorValue {
     }
 }
 
-/// Map value - fast hash map using FxHash or im::HashMap depending on feature
-#[cfg(not(feature = "persistent"))]
+/// Map value - fast hash map using FxHash
 #[derive(Clone, Debug)]
 pub struct MapValue {
     pub entries: FxHashMap<Value, Value>,
 }
 
-#[cfg(not(feature = "persistent"))]
 impl PartialEq for MapValue {
     fn eq(&self, other: &Self) -> bool {
         self.entries == other.entries
     }
 }
 
-#[cfg(not(feature = "persistent"))]
 impl Eq for MapValue {}
 
-#[cfg(not(feature = "persistent"))]
-impl Hash for MapValue {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        // Hash by sorting keys for deterministic ordering
-        let mut pairs: Vec<_> = self.entries.iter().collect();
-        pairs.sort_by(|(k1, _), (k2, _)| {
-            // Use Display for consistent ordering
-            format!("{k1}").cmp(&format!("{k2}"))
-        });
-        state.write_usize(pairs.len());
-        for (k, v) in pairs {
-            k.hash(state);
-            v.hash(state);
-        }
-    }
-}
-
-#[cfg(feature = "persistent")]
-#[derive(Clone, Debug)]
-pub struct MapValue {
-    pub entries: ImHashMap<Value, Value>,
-}
-
-#[cfg(feature = "persistent")]
-impl PartialEq for MapValue {
-    fn eq(&self, other: &Self) -> bool {
-        self.entries == other.entries
-    }
-}
-
-#[cfg(feature = "persistent")]
-impl Eq for MapValue {}
-
-#[cfg(feature = "persistent")]
 impl Hash for MapValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // Hash by sorting keys for deterministic ordering
@@ -230,24 +186,47 @@ impl Hash for MapValue {
     }
 }
 
-/// Set value - fast hash set using FxHash or im::HashSet depending on feature
-#[cfg(not(feature = "persistent"))]
+/// Persistent map - immutable with structural sharing using im::HashMap
+#[derive(Clone, Debug)]
+pub struct PersistentMap {
+    pub entries: ImHashMap<Value, Value>,
+}
+
+impl PartialEq for PersistentMap {
+    fn eq(&self, other: &Self) -> bool {
+        self.entries == other.entries
+    }
+}
+
+impl Eq for PersistentMap {}
+
+impl Hash for PersistentMap {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Hash by sorting keys for deterministic ordering
+        let mut pairs: Vec<_> = self.entries.iter().collect();
+        pairs.sort_by(|(k1, _), (k2, _)| format!("{k1}").cmp(&format!("{k2}")));
+        state.write_usize(pairs.len());
+        for (k, v) in pairs {
+            k.hash(state);
+            v.hash(state);
+        }
+    }
+}
+
+/// Set value - fast hash set using FxHash
 #[derive(Clone, Debug)]
 pub struct SetValue {
     pub elements: FxHashSet<Value>,
 }
 
-#[cfg(not(feature = "persistent"))]
 impl PartialEq for SetValue {
     fn eq(&self, other: &Self) -> bool {
         self.elements == other.elements
     }
 }
 
-#[cfg(not(feature = "persistent"))]
 impl Eq for SetValue {}
 
-#[cfg(not(feature = "persistent"))]
 impl Hash for SetValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // Hash by sorting elements for deterministic ordering
@@ -260,24 +239,21 @@ impl Hash for SetValue {
     }
 }
 
-#[cfg(feature = "persistent")]
+/// Persistent set - immutable with structural sharing using im::HashSet
 #[derive(Clone, Debug)]
-pub struct SetValue {
+pub struct PersistentSet {
     pub elements: ImHashSet<Value>,
 }
 
-#[cfg(feature = "persistent")]
-impl PartialEq for SetValue {
+impl PartialEq for PersistentSet {
     fn eq(&self, other: &Self) -> bool {
         self.elements == other.elements
     }
 }
 
-#[cfg(feature = "persistent")]
-impl Eq for SetValue {}
+impl Eq for PersistentSet {}
 
-#[cfg(feature = "persistent")]
-impl Hash for SetValue {
+impl Hash for PersistentSet {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // Hash by sorting elements for deterministic ordering
         let mut elems: Vec<_> = self.elements.iter().collect();
@@ -299,9 +275,18 @@ pub enum Value {
     Nil,
     Lambda(Arc<LambdaCell>),
     Macro(Arc<MacroCell>),
+    /// Fast mutable vector (Vec-based)
     Vector(Arc<VectorValue>),
+    /// Fast mutable map (FxHashMap-based)
     Map(Arc<MapValue>),
+    /// Fast mutable set (FxHashSet-based)
     Set(Arc<SetValue>),
+    /// Persistent vector with structural sharing (im::Vector)
+    PersistentVector(Arc<PersistentVector>),
+    /// Persistent map with structural sharing (im::HashMap)
+    PersistentMap(Arc<PersistentMap>),
+    /// Persistent set with structural sharing (im::HashSet)
+    PersistentSet(Arc<PersistentSet>),
     /// Reduced wrapper - signals early termination in fold/reduce
     Reduced(Box<Value>),
     NativeFn(NativeFn),
@@ -319,6 +304,9 @@ impl PartialEq for Value {
             (Value::Vector(a), Value::Vector(b)) => a == b,
             (Value::Map(a), Value::Map(b)) => a == b,
             (Value::Set(a), Value::Set(b)) => a == b,
+            (Value::PersistentVector(a), Value::PersistentVector(b)) => a == b,
+            (Value::PersistentMap(a), Value::PersistentMap(b)) => a == b,
+            (Value::PersistentSet(a), Value::PersistentSet(b)) => a == b,
             (Value::Reduced(a), Value::Reduced(b)) => a == b,
             (Value::NativeFn(a), Value::NativeFn(b)) => {
                 // Compare function pointers
@@ -351,6 +339,9 @@ impl Hash for Value {
             Value::Vector(v) => v.hash(state),
             Value::Map(m) => m.hash(state),
             Value::Set(s) => s.hash(state),
+            Value::PersistentVector(v) => v.hash(state),
+            Value::PersistentMap(m) => m.hash(state),
+            Value::PersistentSet(s) => s.hash(state),
             Value::Reduced(v) => v.hash(state),
             Value::NativeFn(f) => {
                 // Hash function pointer address
@@ -456,6 +447,40 @@ impl fmt::Display for Value {
             }
             Value::Set(set) => {
                 write!(f, "#{{")?;
+                let mut first = true;
+                for elem in &set.elements {
+                    if !first {
+                        write!(f, " ")?;
+                    }
+                    first = false;
+                    write!(f, "{elem}")?;
+                }
+                write!(f, "}}")
+            }
+            Value::PersistentVector(vec) => {
+                write!(f, "#pvec[")?;
+                for (i, elem) in vec.elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{elem}")?;
+                }
+                write!(f, "]")
+            }
+            Value::PersistentMap(map) => {
+                write!(f, "#pmap{{")?;
+                let mut first = true;
+                for (k, v) in &map.entries {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    write!(f, "{k} {v}")?;
+                }
+                write!(f, "}}")
+            }
+            Value::PersistentSet(set) => {
+                write!(f, "#pset{{")?;
                 let mut first = true;
                 for elem in &set.elements {
                     if !first {

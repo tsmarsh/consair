@@ -124,6 +124,9 @@ fn eval_loop(mut expr: Value, env: &mut Environment, depth: usize) -> Result<Val
             | Value::Vector(_)
             | Value::Map(_)
             | Value::Set(_)
+            | Value::PersistentVector(_)
+            | Value::PersistentMap(_)
+            | Value::PersistentSet(_)
             | Value::Reduced(_)
             | Value::NativeFn(_) => {
                 return Ok(expr);

@@ -105,14 +105,30 @@ fn find_free_vars_helper(
                 find_free_vars_helper(elem, bound, free);
             }
         }
+        Value::PersistentVector(vec) => {
+            for elem in vec.elements.iter() {
+                find_free_vars_helper(elem, bound, free);
+            }
+        }
         Value::Map(m) => {
             for (k, v) in &m.entries {
                 find_free_vars_helper(k, bound, free);
                 find_free_vars_helper(v, bound, free);
             }
         }
+        Value::PersistentMap(m) => {
+            for (k, v) in m.entries.iter() {
+                find_free_vars_helper(k, bound, free);
+                find_free_vars_helper(v, bound, free);
+            }
+        }
         Value::Set(s) => {
             for elem in &s.elements {
+                find_free_vars_helper(elem, bound, free);
+            }
+        }
+        Value::PersistentSet(s) => {
+            for elem in s.elements.iter() {
                 find_free_vars_helper(elem, bound, free);
             }
         }

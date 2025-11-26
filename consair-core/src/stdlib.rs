@@ -9,9 +9,6 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[cfg(feature = "persistent")]
-use im::Vector as ImVector;
-
 use crate::interner::InternedSymbol;
 use crate::interpreter::Environment;
 use crate::language::{AtomType, StringType, SymbolType, Value};
@@ -521,14 +518,10 @@ pub fn num_eq(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
 // Vector Constructor (de-sugared from << >> syntax)
 // ============================================================================
 
-/// Construct a vector from arguments
+/// Construct a fast vector from arguments
 pub fn vector(args: &[Value], _env: &mut Environment) -> Result<Value, String> {
-    #[cfg(not(feature = "persistent"))]
-    let elements = args.to_vec();
-    #[cfg(feature = "persistent")]
-    let elements = ImVector::from(args.to_vec());
     Ok(Value::Vector(Arc::new(crate::language::VectorValue {
-        elements,
+        elements: args.to_vec(),
     })))
 }
 

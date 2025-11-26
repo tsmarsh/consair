@@ -329,13 +329,25 @@ impl JitEngine {
 
             Value::Vector(_) => Err("JIT vector literals not yet supported".to_string()),
 
+            Value::PersistentVector(_) => {
+                Err("JIT persistent vector literals not yet supported".to_string())
+            }
+
             Value::Lambda(_) => Err("JIT lambda compilation not yet supported".to_string()),
 
             Value::Macro(_) => Err("Macros should be expanded before JIT compilation".to_string()),
 
             Value::Map(_) => Err("JIT map literals not yet supported".to_string()),
 
+            Value::PersistentMap(_) => {
+                Err("JIT persistent map literals not yet supported".to_string())
+            }
+
             Value::Set(_) => Err("JIT set literals not yet supported".to_string()),
+
+            Value::PersistentSet(_) => {
+                Err("JIT persistent set literals not yet supported".to_string())
+            }
 
             Value::Reduced(_) => Err("JIT reduced values not yet supported".to_string()),
 
@@ -1685,13 +1697,21 @@ impl JitEngine {
 
             Value::Vector(_) => Err("JIT does not yet support quoted vectors".to_string()),
 
+            Value::PersistentVector(_) => {
+                Err("JIT does not yet support quoted persistent vectors".to_string())
+            }
+
             Value::Lambda(_) => Err("Cannot quote lambdas".to_string()),
 
             Value::Macro(_) => Err("Cannot quote macros".to_string()),
 
             Value::Map(_) => Err("Cannot quote maps in JIT".to_string()),
 
+            Value::PersistentMap(_) => Err("Cannot quote persistent maps in JIT".to_string()),
+
             Value::Set(_) => Err("Cannot quote sets in JIT".to_string()),
+
+            Value::PersistentSet(_) => Err("Cannot quote persistent sets in JIT".to_string()),
 
             Value::Reduced(_) => Err("Cannot quote reduced values in JIT".to_string()),
 

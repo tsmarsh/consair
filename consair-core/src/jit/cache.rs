@@ -82,11 +82,17 @@ pub fn is_pure_expression(expr: &Value) -> bool {
         Value::Macro(_) => false,
         Value::NativeFn(_) => false,
         Value::Vector(v) => v.elements.iter().all(is_pure_expression),
+        Value::PersistentVector(v) => v.elements.iter().all(is_pure_expression),
         Value::Map(m) => m
             .entries
             .iter()
             .all(|(k, v)| is_pure_expression(k) && is_pure_expression(v)),
+        Value::PersistentMap(m) => m
+            .entries
+            .iter()
+            .all(|(k, v)| is_pure_expression(k) && is_pure_expression(v)),
         Value::Set(s) => s.elements.iter().all(is_pure_expression),
+        Value::PersistentSet(s) => s.elements.iter().all(is_pure_expression),
         Value::Reduced(v) => is_pure_expression(v),
     }
 }

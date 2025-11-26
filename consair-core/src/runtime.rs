@@ -6,9 +6,6 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 
-#[cfg(feature = "persistent")]
-use im::Vector as ImVector;
-
 use crate::interner::InternedSymbol;
 use crate::language::{AtomType, ConsCell, StringType, SymbolType, Value, VectorValue};
 use crate::numeric::NumericType;
@@ -439,6 +436,18 @@ impl RuntimeValue {
 
             Value::Set(_) => Err("JIT set conversion not yet supported".to_string()),
 
+            Value::PersistentVector(_) => {
+                Err("JIT persistent vector conversion not yet supported".to_string())
+            }
+
+            Value::PersistentMap(_) => {
+                Err("JIT persistent map conversion not yet supported".to_string())
+            }
+
+            Value::PersistentSet(_) => {
+                Err("JIT persistent set conversion not yet supported".to_string())
+            }
+
             Value::Reduced(_) => Err("JIT reduced conversion not yet supported".to_string()),
 
             Value::NativeFn(_) => {
@@ -520,14 +529,11 @@ impl RuntimeValue {
                 unsafe {
                     let rt_vec = &*ptr;
                     let slice = std::slice::from_raw_parts(rt_vec.elements, rt_vec.len as usize);
-                    let mut vec_elements = Vec::with_capacity(slice.len());
+                    let mut elements = Vec::with_capacity(slice.len());
                     for elem in slice {
-                        vec_elements.push(elem.to_value()?);
+                        elements.push(elem.to_value()?);
                     }
-                    #[cfg(not(feature = "persistent"))]
-                    let elements = vec_elements;
-                    #[cfg(feature = "persistent")]
-                    let elements = ImVector::from(vec_elements);
+                    // Runtime creates fast vectors
                     Ok(Value::Vector(Arc::new(VectorValue { elements })))
                 }
             }
@@ -1427,11 +1433,7 @@ pub extern "C" fn rt_vector_ref(vec: RuntimeValue, index: RuntimeValue) -> Runti
 mod tests {
     use super::*;
 
-    fn make_vector(vec_elements: Vec<Value>) -> Value {
-        #[cfg(not(feature = "persistent"))]
-        let elements = vec_elements;
-        #[cfg(feature = "persistent")]
-        let elements = ImVector::from(vec_elements);
+    fn make_vector(elements: Vec<Value>) -> Value {
         Value::Vector(Arc::new(VectorValue { elements }))
     }
 
